@@ -1,0 +1,22 @@
+# Enforce consistent line endings across platforms
+# - Treat all files as text and normalize to LF in the repository
+* text=auto
+
+# Ensure common source file types use LF in the repo
+*.ts text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.css text eol=lf
+*.scss text eol=lf
+*.html text eol=lf
+
+# Keep binaries as-is
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
