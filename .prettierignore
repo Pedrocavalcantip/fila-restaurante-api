@@ -1,0 +1,15 @@
+# Na raiz do projeto
+cat > .prettierignore << 'EOF'
+node_modules
+dist
+coverage
+.env
+EOF
+```
+
+Ou crie manualmente e cole:
+```
+node_modules
+dist
+coverage
+.env
