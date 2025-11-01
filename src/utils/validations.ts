@@ -7,7 +7,6 @@ export const loginSchema = z.object({
 });
 
 // Validação de telefone
-export const phoneSchema = z.string().regex(
-  /^\+?[1-9]\d{10,14}$/,
-  'Telefone inválido (formato internacional)'
-);
+export const phoneSchema = z
+  .string()
+  .regex(/^\+?[1-9]\d{10,14}$/, 'Telefone inválido (formato internacional)');
