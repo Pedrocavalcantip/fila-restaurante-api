@@ -26,8 +26,20 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
-      - name: Check Prettier
-        run: npx prettier --check "src/**/*.ts"
+      - name: Format code with Prettier
+        run: npx prettier --write "src/**/*.ts"
+
+      - name: Commit formatting changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git add .
+            git commit -m "chore: auto-format code with Prettier"
+            git push
+          else
+            echo "✅ Nenhuma alteração de formatação necessária."
+          fi
 
       - name: Validate Prisma Schema
         run: npx prisma validate
