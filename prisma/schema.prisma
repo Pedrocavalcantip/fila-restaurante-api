@@ -1,25 +1,460 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")            
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-// ==========================================
-// MODEL DE EXEMPLO: User
-// ==========================================
-model User {
+model Restaurante {
   id        String   @id @default(uuid())
-  email     String   @unique
-  name      String
-  password  String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  nome      String
+  slug      String   @unique
+  cidade    String?
+  estado    String?
+  fusoHorario  String   @default("America/Sao_Paulo")
+  idioma    String   @default("pt-BR")
+  status    StatusRestaurante @default(ATIVO)
+  
+  // Horários de funcionamento (JSON)
+  horariosFuncionamento Json?
+  
+  // Políticas de No-Show
+  toleranciaNoShow Int @default(10) // minutos
+  avisosNoShow     Int @default(2)  // avisos antes de penalizar
+  penalidadeNoShow Int @default(0)  // posições que volta na fila
+  maxReentradasPorDia Int @default(3)
+  permiteFastLane  Boolean @default(false)
+  
+  // Preferências de notificação (via Twilio API)
+  smsAtivado      Boolean @default(true)
+  whatsappAtivado Boolean @default(false)
+  emailAtivado    Boolean @default(true)
+  pushAtivado     Boolean @default(true)
+  
+  // Limites
+  maxTicketsPorHora Int @default(100)
+  maxConexoesSimultaneas Int @default(1000)
+  
+  criadoEm DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+  
+  // Relações
+  filas         Fila[]
+  tickets       Ticket[]
+  usuarios      Usuario[]
+  notificacoes  Notificacao[]
+  pagamentos    Pagamento[]
+  webhooks      Webhook[]
+  templates     TemplatesMensagem[]
+  eventosTicket EventoTicket[]
 
-  @@map("users")
+  @@map("restaurantes")
+}
+
+enum StatusRestaurante {
+  ATIVO
+  SUSPENSO
+  INATIVO
+}
+
+model Fila {
+  id            String @id @default(uuid())
+  restauranteId String
+  restaurante   Restaurante @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+  
+  nome        String
+  descricao   String?
+  slug        String
+  
+  // Política de ordenação
+  politicaOrdem PoliticaOrdemFila @default(FIFO)
+  
+  // Capacidades e limites
+  maxSimultaneos Int @default(50)
+  maxEntradasPorHora Int @default(100)
+  
+  // Horário específico da fila (se diferente do restaurante)
+  horariosEspecificos Json?
+  
+  // Fast lane (pagamento via Stripe)
+  fastLaneAtivado Boolean @default(false)
+  fastLanePreco   Decimal @default(0) @db.Decimal(10, 2)
+  fastLaneMaxPorcentagem Int @default(20) // % máximo de tickets fast lane
+  
+  // Display
+  rotuloPublico String?
+  
+  status StatusFila @default(ATIVA)
+  
+  criadoEm DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+  
+  // Relações
+  tickets Ticket[]
+
+  @@unique([restauranteId, slug])
+  @@map("filas")
+}
+
+enum PoliticaOrdemFila {
+  FIFO
+  PRIORIDADE
+  ENVELHECIMENTO
+  HIBRIDO
+}
+
+enum StatusFila {
+  ATIVA
+  PAUSADA
+  ENCERRADA
+}
+
+model Ticket {
+  id            String @id @default(uuid())
+  restauranteId String
+  restaurante   Restaurante @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+  filaId        String
+  fila          Fila  @relation(fields: [filaId], references: [id], onDelete: Cascade)
+  
+  // Status e prioridade
+  status     StatusTicket @default(AGUARDANDO)
+  prioridade PrioridadeTicket @default(NORMAL)
+  
+  // Posição e estimativa (atualizado via Socket.io)
+  tempoEstimado Int? // minutos estimados (ETA)
+  
+  // Identificação pública
+  rotuloPublico String?
+  numeroTicket  String // Número sequencial legível
+  
+  // Dados de contato (mínimos)
+  nomeCliente     String
+  telefoneCliente String?
+  emailCliente    String?
+  
+  // Preferências do cliente (Twilio API)
+  aceitaSms      Boolean @default(true)
+  aceitaWhatsapp Boolean @default(false)
+  aceitaEmail    Boolean @default(true)
+  aceitaPush     Boolean @default(false)
+  
+  // Contadores
+  contagemNoShow   Int @default(0)
+  contagemReentrada Int @default(0)
+  contagemRechamada Int @default(0)
+  
+  // Timestamps importantes
+  entradaEm      DateTime @default(now())
+  checkInEm      DateTime?
+  chamadoEm      DateTime?
+  atendidoEm     DateTime?
+  finalizadoEm   DateTime?
+  canceladoEm    DateTime?
+  
+  // Observações do atendimento
+  observacoes        String?
+  categoriaServico   String?
+  duracaoAtendimento Int? // minutos reais de atendimento
+  
+  // Pagamento vinculado (Stripe)
+  pagamentoId String?
+  pagamento   Pagamento? @relation(fields: [pagamentoId], references: [id])
+  
+  criadoEm DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+  
+  // Relações
+  eventos       EventoTicket[]
+  notificacoes  Notificacao[]
+
+  @@unique([filaId, numeroTicket])
+  @@index([restauranteId, status])
+  @@index([filaId, status, prioridade])
+  @@map("tickets")
+}
+
+enum StatusTicket {
+  AGUARDANDO
+  CHAMADO
+  ATENDENDO
+  FINALIZADO
+  CANCELADO
+  NO_SHOW
+  PAGAMENTO_PENDENTE
+}
+
+enum PrioridadeTicket {
+  NORMAL
+  FAST_LANE
+  VIP
+  CHECK_IN_CONFIRMADO
+}
+
+model EventoTicket {
+  id            String @id @default(uuid())
+  ticketId      String
+  ticket        Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  restauranteId String
+  restaurante   Restaurante @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+  
+  tipo      TipoEventoTicket
+  
+  // Quem fez a ação
+  tipoAtor  TipoAtor
+  atorId    String? // ID do usuário se foi operador/admin
+  
+  // Detalhes adicionais
+  metadados Json?
+  
+  criadoEm DateTime @default(now())
+
+  @@index([ticketId])
+  @@index([restauranteId, tipo, criadoEm])
+  @@map("eventos_ticket")
+}
+
+enum TipoEventoTicket {
+  CRIADO
+  CHECK_IN_REALIZADO
+  CHAMADO
+  RECHAMADO
+  PULADO
+  NO_SHOW
+  ATENDENDO
+  FINALIZADO
+  CANCELADO
+  PAGAMENTO_INICIADO
+  PAGAMENTO_COMPLETO
+  UPGRADE_REALIZADO
+}
+
+enum TipoAtor {
+  CLIENTE
+  OPERADOR
+  ADMIN
+  SISTEMA
+}
+
+model Usuario {
+  id            String @id @default(uuid())
+  restauranteId String
+  restaurante   Restaurante @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+  
+  nome     String
+  email    String @unique
+  senha    String // Criptografada com Bcrypt.js
+  
+  papel    PapelUsuario
+  status   StatusUsuario @default(ATIVO)
+  
+  // Segurança (autenticação via JWT)
+  doisFatoresAtivado Boolean @default(false)
+  segredoDoisFatores String?
+  
+  ultimoLoginEm DateTime?
+  
+  criadoEm DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([restauranteId, papel])
+  @@map("usuarios")
+}
+
+enum PapelUsuario {
+  ADMIN      // Gerente
+  OPERADOR   // Recepcionista
+}
+
+enum StatusUsuario {
+  ATIVO
+  INATIVO
+  SUSPENSO
+}
+
+model Notificacao {
+  id            String @id @default(uuid())
+  restauranteId String
+  restaurante   Restaurante @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+  ticketId      String
+  ticket        Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  
+  canal     CanalNotificacao
+  template  String // chave do template usado
+  conteudo  String // texto final enviado
+  
+  status    StatusNotificacao @default(PENDENTE)
+  
+  // Destinatário (pode ser mascarado)
+  destinatario String
+  
+  // Informações do provedor (Twilio)
+  provedorId       String?
+  respostaProvedor Json?
+  
+  enviadoEm    DateTime?
+  entregueEm   DateTime?
+  falhouEm     DateTime?
+  
+  criadoEm DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([ticketId])
+  @@index([restauranteId, status])
+  @@map("notificacoes")
+}
+
+enum CanalNotificacao {
+  SMS
+  WHATSAPP
+  EMAIL
+  PUSH
+}
+
+enum StatusNotificacao {
+  PENDENTE
+  ENVIADO
+  ENTREGUE
+  FALHOU
+  CANCELADO
+}
+
+
+model Pagamento {
+  id            String @id @default(uuid())
+  restauranteId String
+  restaurante   Restaurante @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+  
+  // Relacionamento com tickets
+  tickets Ticket[]
+  
+  provedor String // "stripe"
+  
+  valor    Decimal @db.Decimal(10, 2)
+  moeda    String  @default("BRL")
+  
+  metodo   MetodoPagamento
+  status   StatusPagamento @default(PENDENTE)
+  
+  // Referências externas (Stripe)
+  pagamentoIdProvedor String?
+  dadosProvedor       Json?
+  
+  // Reembolso
+  valorReembolsado Decimal? @db.Decimal(10, 2)
+  reembolsadoEm    DateTime?
+  motivoReembolso  String?
+  
+  criadoEm DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([restauranteId, status])
+  @@index([pagamentoIdProvedor])
+  @@map("pagamentos")
+}
+
+enum MetodoPagamento {
+  CARTAO_CREDITO
+  CARTAO_DEBITO
+  PIX
+  DINHEIRO
+  OUTRO
+}
+
+enum StatusPagamento {
+  PENDENTE
+  AUTORIZADO
+  CAPTURADO
+  REEMBOLSADO
+  FALHOU
+  CANCELADO
+}
+
+model Webhook {
+  id            String @id @default(uuid())
+  restauranteId String
+  restaurante   Restaurante @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+  
+  url    String
+  segredo String
+  
+  // Eventos que deseja receber
+  eventos String[] // ["ticket.criado", "ticket.chamado", etc]
+  
+  status StatusWebhook @default(ATIVO)
+  
+  criadoEm DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+  
+  // Relações
+  entregas EntregaWebhook[]
+
+  @@map("webhooks")
+}
+
+enum StatusWebhook {
+  ATIVO
+  INATIVO
+  SUSPENSO
+}
+
+// ============================================
+// 9. ENTREGA DE WEBHOOK (LOG)
+// ============================================
+model EntregaWebhook {
+  id        String @id @default(uuid())
+  webhookId String
+  webhook   Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  
+  evento    String
+  tentativas Int @default(0)
+  status    StatusEntregaWebhook @default(PENDENTE)
+  
+  // Payload e resposta
+  payload       Json
+  resposta      Json?
+  codigoStatus  Int?
+  mensagemErro  String?
+  
+  enviadoEm     DateTime?
+  sucessoEm     DateTime?
+  falhouEm      DateTime?
+  
+  criadoEm DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([webhookId, status])
+  @@map("entregas_webhook")
+}
+
+enum StatusEntregaWebhook {
+  PENDENTE
+  SUCESSO
+  FALHOU
+  TENTANDO_NOVAMENTE
+}
+
+// ============================================
+// 10. TEMPLATES DE MENSAGEM (Twilio)
+// ============================================
+model TemplatesMensagem {
+  id            String @id @default(uuid())
+  restauranteId String
+  restaurante   Restaurante @relation(fields: [restauranteId], references: [id], onDelete: Cascade)
+  
+  chave    String // ex: "lembrete.proximo", "ticket.chamado"
+  idioma   String @default("pt-BR")
+  
+  // Conteúdo com placeholders
+  assunto  String? // para email
+  conteudo String
+  
+  // Variáveis disponíveis (documentação)
+  variaveis String[] @default([])
+  
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([restauranteId, chave, idioma])
+  @@map("templates_mensagem")
 }
