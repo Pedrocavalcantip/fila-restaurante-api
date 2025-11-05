@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { PapelUsuario } from '@prisma/client';
-import { ErroNaoAutenticado } from '../utils/ErrosCustomizados';
+import { ErroNaoAutenticado, ErroProibido } from '../utils/ErrosCustomizados';
 import * as authService from '../services/authService';
 
 // Estende o Request do Express 
@@ -17,25 +17,32 @@ declare global {
   }
 }
 
-
 export const autenticar = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Pegar o token do header
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       throw new ErroNaoAutenticado();
     }
     const token = authHeader.split(' ')[1];
-
-    // Chamar o Service 
     const usuario = await authService.validarTokenEBuscarUsuario(token);
-
-    // Injetar usuário no Request 
     req.usuario = usuario;
-    next(); // Sucesso, passa para o próximo middleware
-
+    next();
   } catch (error) {
-    // Enviar erros para o próximo middleware 
     next(error); 
   }
 };
+
+export const autorizarPapeis = (papeisPermitdos: PapelUsuario[]) => {
+    return ( req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { papel } = req.usuario;
+
+            if (!papeisPermitdos.includes(papel)) {
+                throw new ErroProibido('Você não tem permissão para acessar este recurso.');
+            }
+            next();
+        } catch (error) {
+            next(error);
+        }
+    }
+}
