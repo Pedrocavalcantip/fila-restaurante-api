@@ -2,13 +2,15 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
-import { generalLimiter } from './middlewares/rateLimiter';
 import { logger } from './config/logger';
+import authRoutes from './routes/authRoutes'; 
+import { tratarErros } from './middlewares/erroMiddleware';
 
 dotenv.config();
 
 const app = express();
 
+// Middlewares Globais
 app.use(helmet());
 app.use(
   cors({
@@ -16,12 +18,10 @@ app.use(
     credentials: true,
   })
 );
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use('/api', generalLimiter);
-
+// Rotas de Teste
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -34,5 +34,9 @@ app.get('/', (req, res) => {
   logger.info('Rota raiz acessada');
   res.json({ message: 'Queue Manager API - Sprint 0 ✅' });
 });
+
+// Rotas da Aplicação
+app.use('/api/v1/auth', authRoutes);
+app.use(tratarErros); 
 
 export default app;
