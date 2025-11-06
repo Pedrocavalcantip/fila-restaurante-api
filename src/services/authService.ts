@@ -14,9 +14,6 @@ interface PayloadToken {
   papel: PapelUsuario;
 }
 
-/**
- * Service para autenticar um usuário e gerar um token JWT.
- */
 export const autenticarUsuario = async (emailLimpo: string, senha: string) => {
   // 1. Buscar o usuário no banco
   const usuario = await prisma.usuario.findUnique({
@@ -24,14 +21,14 @@ export const autenticarUsuario = async (emailLimpo: string, senha: string) => {
   });
 
   if (!usuario) {
-    throw new ErroCredenciaisInvalidas(); // Lança erro lógico
+    throw new ErroCredenciaisInvalidas(); 
   }
 
   // 2. Comparar a senha
   const senhaCorreta = await bcrypt.compare(senha, usuario.senha);
 
   if (!senhaCorreta) {
-    throw new ErroCredenciaisInvalidas(); // Lança erro lógico
+    throw new ErroCredenciaisInvalidas(); 
   }
 
   // 3. Checar se o usuário está ativo
@@ -62,9 +59,7 @@ export const autenticarUsuario = async (emailLimpo: string, senha: string) => {
   };
 };
 
-/**
- * Service para validar um token e retornar o payload do usuário.
- */
+
 export const validarTokenEBuscarUsuario = async (token: string) => {
   try {
     // 1. Validar o token

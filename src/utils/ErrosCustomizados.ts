@@ -1,6 +1,3 @@
-// src/utils/ErrosCustomizados.ts
-
-// Erro base
 export class ErroAplicacao extends Error {
   public readonly statusCode: number;
 
