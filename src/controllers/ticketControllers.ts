@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { TicketService } from '../services/ticketService';
+import { SocketService } from '../services/socketService';
 import { StatusTicket } from '@prisma/client';
 import { ErroDadosInvalidos, ErroNaoAutenticado } from '../utils/ErrosCustomizados';
 import { logger } from '../config/logger';
@@ -34,8 +35,7 @@ export class TicketController {
       const { filaId } = req.params;
       
       // 2. Validar body com Zod
-      const { nomeCliente, telefoneCliente, emailCliente } = 
-        criarTicketLocalSchema.parse(req.body).body;
+      const { nomeCliente, telefoneCliente, emailCliente } = criarTicketLocalSchema.parse(req.body);
 
       // 3. Delegar para o Service
       const ticket = await TicketService.criarTicketLocal(
@@ -52,6 +52,13 @@ export class TicketController {
       const { posicao, tempoEstimado } = await TicketService.calcularPosicao(ticket.id);
 
       logger.info({ ticketId: ticket.id, filaId }, 'Ticket criado via controller');
+
+      // Emitir evento Socket.io - fila atualizada
+      SocketService.emitirFilaAtualizada(
+        ator.restauranteId,
+        filaId,
+        [{ ...ticket, posicao, tempoEstimado }]
+      );
 
       // 5. Responder
       res.status(201).json({
@@ -107,7 +114,6 @@ export class TicketController {
       const { filaId } = req.params;
       const { page, limit } = validarPaginacao(req.query);
 
-      // Parse status filter
       let status: StatusTicket[] | undefined;
       if (req.query.status) {
         const statusStr = req.query.status as string;
@@ -144,7 +150,6 @@ export class TicketController {
     try {
       const { ticketId } = req.params;
 
-      // Busca pública - sem validação de restaurante
       const ticket = await TicketService.buscarPorIdComPosicao(ticketId);
 
       res.status(200).json(ticket);
@@ -164,7 +169,6 @@ export class TicketController {
       
       const { ticketId } = req.params;
 
-      // Busca privada - com validação de tenant
       const ticket = await TicketService.buscarPorIdComPosicao(
         ticketId,
         ator.restauranteId
@@ -190,8 +194,13 @@ export class TicketController {
       const ticket = await TicketService.chamar(ticketId, ator);
       
       logger.info({ ticketId, atorId: ator.id }, 'Ticket chamado via controller');
-      
-      // TODO: SocketService.emitir(...)
+
+      // Emitir evento Socket.io
+      SocketService.emitirTicketChamado(
+        ator.restauranteId,
+        ticket.filaId,
+        ticket
+      );
 
       res.status(200).json({
         mensagem: 'Ticket chamado com sucesso',
@@ -216,9 +225,14 @@ export class TicketController {
       const ticket = await TicketService.pular(ticketId, ator);
       
       logger.info({ ticketId, atorId: ator.id }, 'Ticket pulado via controller');
-      
-      // TODO: SocketService.emitir(...)
 
+      // Emitir evento Socket.io - fila atualizada
+      SocketService.emitirFilaAtualizada(
+        ator.restauranteId,
+        ticket.filaId,
+        []
+      );
+  
       res.status(200).json({
         mensagem: 'Ticket retornou para a fila',
         ticket
@@ -242,8 +256,13 @@ export class TicketController {
       const ticket = await TicketService.marcarNoShow(ticketId, ator);
       
       logger.info({ ticketId, atorId: ator.id }, 'No-show marcado via controller');
-      
-      // TODO: SocketService.emitir(...)
+
+      // Emitir evento Socket.io
+      SocketService.emitirTicketNoShow(
+        ator.restauranteId,
+        ticket.filaId,
+        ticketId
+      );
 
       res.status(200).json({
         mensagem: 'Ticket marcado como no-show',
@@ -269,7 +288,12 @@ export class TicketController {
       
       logger.info({ ticketId, atorId: ator.id }, 'Ticket rechamado via controller');
       
-      // TODO: SocketService.emitir(...)
+      // Emitir evento Socket.io
+      SocketService.emitirTicketChamado(
+        ator.restauranteId,
+        ticket.filaId,
+        ticket
+      );
 
       res.status(200).json({
         mensagem: 'Ticket rechamado com sucesso',
@@ -290,7 +314,7 @@ export class TicketController {
       if (!ator) throw new ErroNaoAutenticado();
       
       const { ticketId } = req.params;
-      const { observacoes } = req.body;
+      const { observacoes = "" } = req.body || {};
 
       if (observacoes && observacoes.length > 500) {
         throw new ErroDadosInvalidos('Observações muito longas (máximo 500 caracteres)');
@@ -301,10 +325,15 @@ export class TicketController {
         ator,
         observacoes?.trim()
       );
-      
+
       logger.info({ ticketId, atorId: ator.id }, 'Ticket finalizado via controller');
-      
-      // TODO: SocketService.emitir(...)
+
+      // Emitir evento Socket.io
+      SocketService.emitirTicketFinalizado(
+        ator.restauranteId,
+        ticket.filaId,
+        ticketId
+      );
 
       res.status(200).json({
         mensagem: 'Atendimento finalizado com sucesso',
@@ -339,7 +368,12 @@ export class TicketController {
       
       logger.info({ ticketId, atorId: ator.id }, 'Ticket cancelado via controller');
       
-      // TODO: SocketService.emitir(...)
+      // Emitir evento Socket.io
+      SocketService.emitirTicketCancelado(
+        ator.restauranteId,
+        ticket.filaId,
+        ticketId
+      );
 
       res.status(200).json({
         mensagem: 'Ticket cancelado com sucesso',
@@ -372,7 +406,14 @@ export class TicketController {
         novaPosicao: posicao 
       }, 'Check-in realizado via controller');
       
-      // TODO: SocketService.emitir(...)
+      // Emitir evento Socket.io - posição atualizada
+      SocketService.emitirPosicaoAtualizada(
+        ator.restauranteId,
+        ticket.filaId,
+        ticketId,
+        posicao,
+        tempoEstimado
+      );
 
       res.status(200).json({
         mensagem: 'Check-in realizado com sucesso',

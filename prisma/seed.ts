@@ -1,4 +1,3 @@
-// prisma/seed.ts
 import { PrismaClient, PapelUsuario } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
