@@ -20,8 +20,8 @@ export const criarUsuarioSchema = z.object({
 });
 
 export const criarTicketLocalSchema = z.object({
-  nomeCliente: z.string({ 
-    required_error: 'Nome do cliente é obrigatório' 
+  nomeCliente: z.string({
+    message: 'Nome do cliente é obrigatório'
   })
   .min(3, 'Nome do cliente deve ter pelo menos 3 caracteres')
   .max(100, 'Nome do cliente muito longo (máximo 100 caracteres)')

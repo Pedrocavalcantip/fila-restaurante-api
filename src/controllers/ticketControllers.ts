@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { TicketService } from '../services/ticketService';
+import { TicketService } from '../services/ticketservice';
 import { SocketService } from '../services/socketService';
 import { StatusTicket } from '@prisma/client';
 import { ErroDadosInvalidos, ErroNaoAutenticado } from '../utils/ErrosCustomizados';

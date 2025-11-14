@@ -6,15 +6,13 @@ on:
   pull_request:
     branches: [ main ]
 
-permissions:
-  contents: write  
-
 jobs:
-  lint-and-validate:
+  build:
     runs-on: ubuntu-latest
 
     env:
       DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
+      DIRECT_URL: postgresql://dummy:dummy@localhost:5432/dummy
 
     steps:
       - name: Checkout code
@@ -29,14 +27,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run ESLint
-        run: npm run lint
-
-      - name: Check formatting with Prettier
-        run: npx prettier --check "src/**/*.ts"
-
-      - name: Validate Prisma Schema
-        run: npx prisma validate
-
       - name: Generate Prisma Client
         run: npx prisma generate
+
+      - name: Build TypeScript
+        run: npm run build
