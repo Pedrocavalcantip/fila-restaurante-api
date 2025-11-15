@@ -211,28 +211,6 @@ describe('Sprint 1 - Testes de Integração', () => {
       ticket2Id = res2.body.ticket.id;
       expect(res2.body.ticket.posicao).toBe(2);
     });
-
-    it('deve recalcular posições após check-in (prioridade)', async () => {
-      const res1 = await request(app)
-        .post(`/api/v1/tickets/filas/${testIds.fila}/tickets`)
-        .set('Authorization', `Bearer ${token}`)
-        .send({ nomeCliente: 'Cliente Check-in 1' });
-
-      const res2 = await request(app)
-        .post(`/api/v1/tickets/filas/${testIds.fila}/tickets`)
-        .set('Authorization', `Bearer ${token}`)
-        .send({ nomeCliente: 'Cliente Check-in 2' });
-      
-      const ticket2Id = res2.body.ticket.id;
-
-      const response = await request(app)
-        .post(`/api/v1/tickets/${ticket2Id}/check-in`)
-        .set('Authorization', `Bearer ${token}`);
-
-      expect(response.status).toBe(200);
-      expect(response.body.ticket.prioridade).toBe('CHECK_IN_CONFIRMADO');
-      expect(response.body.ticket.posicao).toBe(1); // Deve subir para primeira posição
-    });
   });
 
   describe('5. Rate Limiting', () => {

@@ -103,7 +103,7 @@ export async function criarTicketTeste(dados: {
   nomeCliente: string;
   filaId?: string;
   restauranteId?: string;
-  prioridade?: 'NORMAL' | 'FAST_LANE' | 'VIP' | 'CHECK_IN_CONFIRMADO';
+  prioridade?: 'NORMAL' | 'FAST_LANE' | 'VIP';
   status?: 'AGUARDANDO' | 'CHAMADO' | 'ATENDENDO' | 'FINALIZADO' | 'CANCELADO' | 'NO_SHOW';
 }) {
   const hoje = new Date();

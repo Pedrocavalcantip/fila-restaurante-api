@@ -1,7 +1,3 @@
-// Schema Prisma - Padrão SaaS Seguro (Soft Deletes)
-// Mudança: Removido 'onDelete: Cascade' para usar 'Restrict' (padrão)
-// Isso nos força a usar 'soft deletes' (mudar status) em vez de apagar dados.
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -30,6 +26,9 @@ model Restaurante {
   maxReentradasPorDia Int     @default(3)
   permiteFastLane     Boolean @default(false)
   
+  precoFastLane Decimal @default(17.00) @db.Decimal(10, 2)
+  precoVip      Decimal @default(28.00) @db.Decimal(10, 2)
+  
   smsAtivado       Boolean @default(true)
   whatsappAtivado  Boolean @default(false)
   emailAtivado     Boolean @default(true)
@@ -44,6 +43,7 @@ model Restaurante {
   // Relações
   filas         Fila[]
   tickets       Ticket[]
+  clientes      Cliente[]
   usuarios      Usuario[]
   notificacoes  Notificacao[]
   pagamentos    Pagamento[]
@@ -58,6 +58,43 @@ enum StatusRestaurante {
   ATIVO
   SUSPENSO
   INATIVO
+}
+
+model Cliente {
+  id              String   @id @default(uuid())
+  restauranteId   String
+  restaurante     Restaurante @relation(fields: [restauranteId], references: [id])
+  
+  nomeCompleto    String
+  telefone        String
+  email           String
+  
+  cidade          String
+  estado          String
+  
+  totalVisitas    Int      @default(0)
+  totalNoShows    Int      @default(0)
+  totalFastLane   Int      @default(0)
+  totalVip        Int      @default(0)
+  
+  isVip           Boolean  @default(false)
+  vipDesde        DateTime?
+  
+  bloqueado       Boolean  @default(false)
+  motivoBloqueio  String?
+  
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+  
+  // Relações
+  tickets         Ticket[]
+  
+  @@unique([restauranteId, telefone])
+  @@unique([restauranteId, email])
+  @@index([telefone])
+  @@index([email])
+  @@index([cidade, estado])
+  @@map("clientes")
 }
 
 model Fila {
@@ -107,12 +144,23 @@ enum StatusFila {
   ENCERRADA
 }
 
+enum TipoEntrada {
+  LOCAL
+  REMOTO
+}
+
 model Ticket {
   id            String @id @default(uuid())
   restauranteId String
   restaurante   Restaurante @relation(fields: [restauranteId], references: [id]) 
   filaId        String
   fila          Fila   @relation(fields: [filaId], references: [id]) 
+  
+  clienteId     String?
+  cliente       Cliente? @relation(fields: [clienteId], references: [id])
+  
+  tipoEntrada    TipoEntrada      @default(LOCAL)
+  valorPrioridade Decimal         @default(0) @db.Decimal(10, 2)
   
   status     StatusTicket     @default(AGUARDANDO)
   prioridade PrioridadeTicket @default(NORMAL)
@@ -160,6 +208,7 @@ model Ticket {
   @@index([filaId, status, prioridade])
   @@index([filaId, status, entradaEm])
   @@index([restauranteId, telefoneCliente, criadoEm])
+  @@index([clienteId])
   @@map("tickets")
 }
 
@@ -177,7 +226,6 @@ enum PrioridadeTicket {
   NORMAL
   FAST_LANE
   VIP
-  CHECK_IN_CONFIRMADO
 }
 
 model EventoTicket {

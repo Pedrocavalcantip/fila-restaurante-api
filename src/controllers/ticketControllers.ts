@@ -385,50 +385,6 @@ export class TicketController {
   }
 
   // ==========================================================================
-  // POST /api/restaurantes/:restauranteId/tickets/:ticketId/check-in
-  // Marcar check-in (aumenta prioridade)
-  // ==========================================================================
-  static async marcarCheckIn(req: Request, res: Response, next: NextFunction) {
-    try {
-      const ator = req.usuario;
-      if (!ator) throw new ErroNaoAutenticado();
-      
-      const { ticketId } = req.params;
-
-      const ticket = await TicketService.marcarCheckIn(ticketId, ator);
-
-      // Calcular nova posição após check-in
-      const { posicao, tempoEstimado } = await TicketService.calcularPosicao(ticketId);
-      
-      logger.info({ 
-        ticketId, 
-        atorId: ator.id,
-        novaPosicao: posicao 
-      }, 'Check-in realizado via controller');
-      
-      // Emitir evento Socket.io - posição atualizada
-      SocketService.emitirPosicaoAtualizada(
-        ator.restauranteId,
-        ticket.filaId,
-        ticketId,
-        posicao,
-        tempoEstimado
-      );
-
-      res.status(200).json({
-        mensagem: 'Check-in realizado com sucesso',
-        ticket: {
-          ...ticket,
-          posicao,
-          tempoEstimado
-        }
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // ==========================================================================
   // GET /api/tickets/publico/:ticketId/posicao
   // Consultar posição atual do ticket (para clientes via polling)
   // ==========================================================================

@@ -13,10 +13,9 @@ import { ErroNaoEncontrado, ErroDadosInvalidos } from '../utils/ErrosCustomizado
 import { logger } from '../config/logger';
 
 const ordemPrioridade: Record<PrioridadeTicket, number> = {
-  [PrioridadeTicket.CHECK_IN_CONFIRMADO]: 1,
-  [PrioridadeTicket.VIP]: 2,
-  [PrioridadeTicket.FAST_LANE]: 3,
-  [PrioridadeTicket.NORMAL]: 4,
+  [PrioridadeTicket.VIP]: 1,
+  [PrioridadeTicket.FAST_LANE]: 2,
+  [PrioridadeTicket.NORMAL]: 3,
 };
 
 type CriarTicketDTO = {
@@ -677,38 +676,7 @@ export class TicketService {
     return ticketAtualizado;
   }
 
-  static async marcarCheckIn(ticketId: string, ator: AtorDTO): Promise<Ticket> {
-    const ticket = await this.validarTicketRestaurante(ticketId, ator.restauranteId);
 
-    if (ticket.status !== StatusTicket.AGUARDANDO) {
-      throw new ErroDadosInvalidos('Apenas tickets aguardando podem fazer check-in.');
-    }
-
-    const ticketAtualizado = await prisma.$transaction(async (tx) => {
-      const atualizado = await tx.ticket.update({
-        where: { id: ticketId },
-        data: {
-          prioridade: PrioridadeTicket.CHECK_IN_CONFIRMADO,
-          checkInEm: new Date()
-        },
-        include: { fila: true }
-      });
-      await tx.eventoTicket.create({
-        data: {
-          ticketId: atualizado.id,
-          restauranteId: atualizado.restauranteId,
-          tipo: TipoEventoTicket.CHECK_IN_REALIZADO,
-          tipoAtor: TipoAtor.OPERADOR,
-          atorId: ator.id,
-          metadados: { novaPrioridade: PrioridadeTicket.CHECK_IN_CONFIRMADO }
-        }
-      });
-      return atualizado;
-    });
-    
-    logger.info({ ticketId, atorId: ator.id }, 'Check-in realizado por operador');
-    return ticketAtualizado;
-  }
 }
 
 export default TicketService;

@@ -63,10 +63,6 @@ router.post('/:ticketId/pular', operadorLimiter, autenticar, autorizarPapeis([Pa
 // Marcar no-show (cliente não compareceu após chamadas)
 router.post('/:ticketId/no-show', operadorLimiter, autenticar, autorizarPapeis([PapelUsuario.ADMIN, PapelUsuario.OPERADOR]), TicketController.marcarNoShow);
 
-// POST /api/v1/tickets/:ticketId/check-in
-// Marcar check-in (aumenta prioridade do ticket)
-router.post('/:ticketId/check-in', operadorLimiter, autenticar, autorizarPapeis([PapelUsuario.ADMIN, PapelUsuario.OPERADOR]), TicketController.marcarCheckIn);
-
 // POST /api/v1/tickets/:ticketId/finalizar
 // Finalizar atendimento (marca como concluído)
 router.post('/:ticketId/finalizar', operadorLimiter, autenticar, autorizarPapeis([PapelUsuario.ADMIN, PapelUsuario.OPERADOR]), TicketController.finalizar);
