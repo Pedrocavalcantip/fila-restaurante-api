@@ -60,6 +60,81 @@ export const loginClienteSchema = z.object({
   }),
 });
 
+const validarSlugRestaurante = (slug: string) => {
+  return /^[a-z0-9-]+$/.test(slug);
+};
+
+export const cadastroRestauranteSchema = z.object({
+  body: z.object({
+    nome: z.string()
+      .trim()
+      .min(3, 'Nome deve ter pelo menos 3 caracteres')
+      .max(100, 'Nome muito longo'),
+    slug: z.string()
+      .trim()
+      .min(3, 'Slug deve ter pelo menos 3 caracteres')
+      .max(50, 'Slug muito longo')
+      .toLowerCase()
+      .refine(validarSlugRestaurante, { 
+        message: 'Slug deve conter apenas letras minúsculas, números e hífens' 
+      }),
+    cidade: z.string()
+      .trim()
+      .min(2, 'Cidade deve ter pelo menos 2 caracteres')
+      .max(100, 'Cidade muito longa')
+      .optional(),
+    estado: z.string()
+      .trim()
+      .length(2, 'Estado deve ter exatamente 2 caracteres')
+      .transform(valor => valor.toUpperCase())
+      .optional(),
+    emailAdmin: z.string()
+      .email('Email inválido')
+      .trim()
+      .max(150, 'Email muito longo'),
+    senhaAdmin: z.string()
+      .min(8, 'Senha deve ter no mínimo 8 caracteres'),
+    precoFastLane: z.number()
+      .positive('Preço Fast Lane deve ser positivo')
+      .optional()
+      .default(17.00),
+    precoVip: z.number()
+      .positive('Preço VIP deve ser positivo')
+      .optional()
+      .default(28.00),
+  }),
+});
+
+export const atualizarRestauranteSchema = z.object({
+  body: z.object({
+    nome: z.string()
+      .trim()
+      .min(3, 'Nome deve ter pelo menos 3 caracteres')
+      .max(100, 'Nome muito longo')
+      .optional(),
+    cidade: z.string()
+      .trim()
+      .min(2, 'Cidade deve ter pelo menos 2 caracteres')
+      .max(100, 'Cidade muito longa')
+      .optional(),
+    estado: z.string()
+      .trim()
+      .length(2, 'Estado deve ter exatamente 2 caracteres')
+      .transform(valor => valor.toUpperCase())
+      .optional(),
+    precoFastLane: z.number()
+      .positive('Preço Fast Lane deve ser positivo')
+      .optional(),
+    precoVip: z.number()
+      .positive('Preço VIP deve ser positivo')
+      .optional(),
+    permiteFastLane: z.boolean().optional(),
+    toleranciaNoShow: z.number().int().positive().optional(),
+    avisosNoShow: z.number().int().positive().optional(),
+    maxReentradasPorDia: z.number().int().positive().optional(),
+  }),
+});
+
 // Criar Usuário
 export const criarUsuarioSchema = z.object({
   body: z.object({

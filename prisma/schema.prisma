@@ -2,7 +2,7 @@ generator client {
   provider = "prisma-client-js"
 }
 
-datasource db {
+datasource 
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
@@ -47,36 +47,28 @@ model Restaurante {
 }
 
 model Cliente {
-  id              String   @id @default(uuid())
-  restauranteId   String
-  restaurante     Restaurante @relation(fields: [restauranteId], references: [id])
-  
-  nomeCompleto    String
-  telefone        String
-  email           String
-  senhaHash       String
-  
-  cidade          String
-  estado          String
-  
-  totalVisitas    Int      @default(0)
-  totalNoShows    Int      @default(0)
-  totalFastLane   Int      @default(0)
-  totalVip        Int      @default(0)
-  
-  isVip           Boolean  @default(false)
-  vipDesde        DateTime?
-  
-  bloqueado       Boolean  @default(false)
-  motivoBloqueio  String?
-  ultimoLoginEm   DateTime?
-  
-  criadoEm        DateTime @default(now())
-  atualizadoEm    DateTime @updatedAt
-  
-  // Relações
-  tickets         Ticket[]
-  
+  id             String      @id @default(uuid())
+  restauranteId  String
+  nomeCompleto   String
+  telefone       String
+  email          String
+  cidade         String
+  estado         String
+  totalVisitas   Int         @default(0)
+  totalNoShows   Int         @default(0)
+  totalFastLane  Int         @default(0)
+  totalVip       Int         @default(0)
+  isVip          Boolean     @default(false)
+  vipDesde       DateTime?
+  bloqueado      Boolean     @default(false)
+  motivoBloqueio String?
+  criadoEm       DateTime    @default(now())
+  atualizadoEm   DateTime    @updatedAt
+  senhaHash      String
+  ultimoLoginEm  DateTime?
+  restaurante    Restaurante @relation(fields: [restauranteId], references: [id])
+  tickets        Ticket[]
+
   @@unique([restauranteId, telefone])
   @@unique([restauranteId, email])
   @@index([telefone])
@@ -408,4 +400,27 @@ enum StatusEntregaWebhook {
   SUCESSO
   FALHOU
   TENTANDO_NOVAMENTE
+}
+ESSO
+  FALHOU
+  TENTANDO_NOVAMENTE
+}
+
+model TemplatesMensagem {
+  id            String @id @default(uuid())
+  restauranteId String
+  restaurante   Restaurante @relation(fields: [restauranteId], references: [id]) 
+  
+  chave  String
+  idioma String @default("pt-BR")
+  
+  assunto  String?
+  conteudo String
+  
+  variaveis String[] @default([])
+  
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([restauranteId, chave, idioma])
+  @@map("templates_mensagem")
 }
