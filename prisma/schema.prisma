@@ -43,6 +43,7 @@ model Restaurante {
   usuarios               Usuario[]
   webhooks               Webhook[]
 
+  @@index([cidade, estado])
   @@map("restaurantes")
 }
 

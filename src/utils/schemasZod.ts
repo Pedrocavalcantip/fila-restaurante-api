@@ -60,6 +60,26 @@ export const loginClienteSchema = z.object({
   }),
 });
 
+export const atualizarPerfilClienteSchema = z.object({
+  body: z.object({
+    nomeCompleto: z.string()
+      .trim()
+      .min(3, 'Nome completo deve ter pelo menos 3 caracteres')
+      .max(120, 'Nome completo muito longo')
+      .optional(),
+    cidade: z.string()
+      .trim()
+      .min(2, 'Cidade deve ter pelo menos 2 caracteres')
+      .max(100, 'Cidade muito longa')
+      .optional(),
+    estado: z.string()
+      .trim()
+      .length(2, 'Estado deve ter exatamente 2 caracteres')
+      .transform(valor => valor.toUpperCase())
+      .optional(),
+  }),
+});
+
 const validarSlugRestaurante = (slug: string) => {
   return /^[a-z0-9-]+$/.test(slug);
 };
