@@ -12,6 +12,7 @@ import {
 } from '@prisma/client';
 import { ErroNaoEncontrado, ErroDadosInvalidos, ErroNaoAutenticado } from '../utils/ErrosCustomizados';
 import { logger } from '../config/logger';
+import * as notificacaoService from './notificacaoService';
 
 const ordemPrioridade: Record<PrioridadeTicket, number> = {
   [PrioridadeTicket.VIP]: 1,
@@ -761,6 +762,40 @@ export class TicketService {
     });
 
     logger.info({ ticketId }, 'Ticket chamado');
+
+    // Enviar notificação por email (assíncrono)
+    if (ticketAtualizado.emailCliente && ticketAtualizado.aceitaEmail) {
+      // Buscar dados do restaurante
+      const restaurante = await prisma.restaurante.findUnique({
+        where: { id: ticketAtualizado.restauranteId },
+        select: {
+          id: true,
+          nome: true,
+          cidade: true,
+          estado: true
+        }
+      });
+
+      if (restaurante) {
+        const enderecoCompleto = `${restaurante.cidade} - ${restaurante.estado}`;
+
+        notificacaoService.enviarChamado({
+          ticketId: ticketAtualizado.id,
+          clienteId: ticketAtualizado.clienteId || undefined,
+          nomeCliente: ticketAtualizado.nomeCliente,
+          emailCliente: ticketAtualizado.emailCliente,
+          numeroTicket: ticketAtualizado.numeroTicket,
+          nomeRestaurante: restaurante.nome,
+          restauranteId: ticketAtualizado.restauranteId,
+          prioridade: ticketAtualizado.prioridade,
+          valorPrioridade: Number(ticketAtualizado.valorPrioridade),
+          enderecoRestaurante: enderecoCompleto
+        }).catch((error) => {
+          logger.error({ error, ticketId }, 'Falha ao enviar notificação de chamado');
+        });
+      }
+    }
+
     return ticketAtualizado;
   }
 
@@ -872,6 +907,15 @@ export class TicketService {
     return ticketAtualizado;
   }
 
+  /**
+   * Finalizar Ticket
+   * 
+   * Status FINALIZADO significa:
+   * - Cliente foi atendido com sucesso
+   * - Cliente pagou a conta COMPLETA presencialmente (incluindo taxa de prioridade se houver)
+   * - Não há necessidade de pagamento online via gateway
+   * - Pagamento é confirmado no momento da finalização
+   */
   static async finalizar(ticketId: string, ator: AtorDTO, observacoes?: string): Promise<Ticket> {
     const ticket = await this.validarTicketRestaurante(ticketId, ator.restauranteId);
 
@@ -896,6 +940,32 @@ export class TicketService {
         },
         include: { fila: true }
       });
+
+      // Se ticket tem clienteId, atualizar estatísticas do cliente
+      if (ticket.clienteId) {
+        const incrementos: any = {
+          totalVisitas: { increment: 1 }
+        };
+
+        // Incrementar contadores específicos de prioridade
+        if (ticket.prioridade === PrioridadeTicket.FAST_LANE) {
+          incrementos.totalFastLane = { increment: 1 };
+        } else if (ticket.prioridade === PrioridadeTicket.VIP) {
+          incrementos.totalVip = { increment: 1 };
+        }
+
+        await tx.cliente.update({
+          where: { id: ticket.clienteId },
+          data: incrementos
+        });
+
+        logger.info({ 
+          clienteId: ticket.clienteId, 
+          ticketId,
+          prioridade: ticket.prioridade 
+        }, 'Estatísticas do cliente atualizadas após finalização');
+      }
+
       await tx.eventoTicket.create({
         data: {
           ticketId,
@@ -903,13 +973,17 @@ export class TicketService {
           tipo: TipoEventoTicket.FINALIZADO,
           tipoAtor: ator.papel === PapelUsuario.ADMIN ? TipoAtor.ADMIN : TipoAtor.OPERADOR,
           atorId: ator.id,
-          metadados: { duracaoAtendimento }
+          metadados: { 
+            duracaoAtendimento,
+            valorPrioridade: Number(ticket.valorPrioridade),
+            pagamentoConfirmado: true // Pagamento realizado presencialmente
+          }
         }
       });
       return atualizado;
     });
 
-    logger.info({ ticketId }, 'Atendimento finalizado');
+    logger.info({ ticketId, clienteId: ticket.clienteId }, 'Atendimento finalizado - pagamento confirmado presencialmente');
     return ticketAtualizado;
   }
 

@@ -150,12 +150,15 @@ export const cadastrarCliente = async (dados: DadosCadastroCliente) => {
 
   const token = gerarTokenCliente(clienteCriado.id);
 
+  // Enviar email de boas-vindas (assíncrono)
   enviarBoasVindas({
     clienteId: clienteCriado.id,
     restauranteId: restaurante.id,
     nomeCompleto: clienteCriado.nomeCompleto,
     email: clienteCriado.email,
     telefone: clienteCriado.telefone,
+    cidade: clienteCriado.cidade,
+    estado: clienteCriado.estado,
   }).catch((error) => {
     logger.error({ error, clienteId: clienteCriado.id }, 'Falha ao acionar notificacao de boas-vindas para cliente');
   });
