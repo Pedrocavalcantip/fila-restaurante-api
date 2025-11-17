@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PapelUsuario } from '@prisma/client';
+import { PapelUsuario, PrioridadeTicket } from '@prisma/client';
 
 const telefoneLimpo = (valor: string) => valor.replace(/\D/g, '');
 
@@ -187,4 +187,18 @@ export const criarTicketLocalSchema = z.object({
     .optional()
     .or(z.literal(''))
     .transform(val => val === '' ? undefined : val), 
+});
+
+export const entrarNaFilaRemotoSchema = z.object({
+  body: z.object({
+    prioridade: z.nativeEnum(PrioridadeTicket, {
+      message: 'Prioridade inválida. Valores aceitos: NORMAL, FAST_LANE, VIP',
+    }),
+    quantidadePessoas: z.number()
+      .int('Quantidade de pessoas deve ser um número inteiro')
+      .min(1, 'Quantidade mínima é 1 pessoa')
+      .max(20, 'Quantidade máxima é 20 pessoas')
+      .optional()
+      .default(1),
+  }),
 });
