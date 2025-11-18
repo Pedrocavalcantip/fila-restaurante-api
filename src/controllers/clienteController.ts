@@ -38,9 +38,7 @@ export const obterPerfil = async (req: Request, res: Response, next: NextFunctio
 
     const perfil = await buscarPerfil(cliente.id);
 
-    res.status(200).json({
-      cliente: perfil,
-    });
+    res.status(200).json(perfil);
   } catch (error) {
     next(error);
   }

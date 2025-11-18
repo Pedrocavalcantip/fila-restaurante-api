@@ -116,10 +116,16 @@ export class TicketController {
           id: ticketComPosicao.id,
           numeroTicket: ticketComPosicao.numeroTicket,
           prioridade: ticketComPosicao.prioridade,
-          valorPrioridade: ticketComPosicao.valorPrioridade,
+          valorPrioridade: Number(ticketComPosicao.valorPrioridade),
+          tipoEntrada: ticketComPosicao.tipoEntrada,
           posicao: ticketComPosicao.posicao,
           tempoEstimado: ticketComPosicao.tempoEstimado,
           status: ticketComPosicao.status,
+          clienteId: ticketComPosicao.clienteId,
+          nomeCliente: ticketComPosicao.nomeCliente,
+          telefoneCliente: ticketComPosicao.telefoneCliente,
+          emailCliente: ticketComPosicao.emailCliente,
+          restauranteId: ticketComPosicao.restauranteId,
           criadoEm: ticketComPosicao.criadoEm
         }
       });

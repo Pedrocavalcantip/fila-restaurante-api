@@ -943,6 +943,12 @@ export class TicketService {
 
       // Se ticket tem clienteId, atualizar estatísticas do cliente
       if (ticket.clienteId) {
+        logger.info({ 
+          clienteId: ticket.clienteId, 
+          ticketId,
+          prioridade: ticket.prioridade 
+        }, 'Cliente identificado - atualizando estatísticas');
+        
         const incrementos: any = {
           totalVisitas: { increment: 1 }
         };
@@ -950,8 +956,10 @@ export class TicketService {
         // Incrementar contadores específicos de prioridade
         if (ticket.prioridade === PrioridadeTicket.FAST_LANE) {
           incrementos.totalFastLane = { increment: 1 };
+          logger.info({ clienteId: ticket.clienteId }, 'Incrementando totalFastLane');
         } else if (ticket.prioridade === PrioridadeTicket.VIP) {
           incrementos.totalVip = { increment: 1 };
+          logger.info({ clienteId: ticket.clienteId }, 'Incrementando totalVip');
         }
 
         await tx.cliente.update({
@@ -962,8 +970,11 @@ export class TicketService {
         logger.info({ 
           clienteId: ticket.clienteId, 
           ticketId,
-          prioridade: ticket.prioridade 
+          prioridade: ticket.prioridade,
+          incrementos
         }, 'Estatísticas do cliente atualizadas após finalização');
+      } else {
+        logger.info({ ticketId }, 'Ticket sem clienteId - estatísticas não atualizadas');
       }
 
       await tx.eventoTicket.create({

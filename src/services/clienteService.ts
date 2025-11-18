@@ -33,8 +33,31 @@ export const buscarRestaurantesProximos = async (clienteId: string) => {
       slug: true,
       cidade: true,
       estado: true,
+      status: true,
       precoFastLane: true,
       precoVip: true,
+      filas: {
+        where: {
+          status: 'ATIVA',
+        },
+        select: {
+          id: true,
+          nome: true,
+          slug: true,
+          status: true,
+          _count: {
+            select: {
+              tickets: {
+                where: {
+                  status: {
+                    in: ['AGUARDANDO', 'CHAMADO'],
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     },
     orderBy: {
       nome: 'asc',
