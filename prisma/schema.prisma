@@ -2,7 +2,7 @@ generator client {
   provider = "prisma-client-js"
 }
 
-datasource 
+datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
@@ -401,27 +401,4 @@ enum StatusEntregaWebhook {
   SUCESSO
   FALHOU
   TENTANDO_NOVAMENTE
-}
-ESSO
-  FALHOU
-  TENTANDO_NOVAMENTE
-}
-
-model TemplatesMensagem {
-  id            String @id @default(uuid())
-  restauranteId String
-  restaurante   Restaurante @relation(fields: [restauranteId], references: [id]) 
-  
-  chave  String
-  idioma String @default("pt-BR")
-  
-  assunto  String?
-  conteudo String
-  
-  variaveis String[] @default([])
-  
-  atualizadoEm DateTime @updatedAt
-
-  @@unique([restauranteId, chave, idioma])
-  @@map("templates_mensagem")
 }
