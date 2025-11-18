@@ -14,6 +14,7 @@ module.exports = {
     '!src/**/*.d.ts',
     '!src/server.ts',
   ],
+  coverageReporters: ['text', 'text-summary', 'lcov', 'html'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },

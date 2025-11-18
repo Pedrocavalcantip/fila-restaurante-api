@@ -7,10 +7,12 @@ import {
   TipoEventoTicket, 
   Ticket, 
   StatusFila,
-  Prisma
+  Prisma,
+  TipoEntrada
 } from '@prisma/client';
-import { ErroNaoEncontrado, ErroDadosInvalidos } from '../utils/ErrosCustomizados';
+import { ErroNaoEncontrado, ErroDadosInvalidos, ErroNaoAutenticado } from '../utils/ErrosCustomizados';
 import { logger } from '../config/logger';
+import * as notificacaoService from './notificacaoService';
 
 const ordemPrioridade: Record<PrioridadeTicket, number> = {
   [PrioridadeTicket.VIP]: 1,
@@ -23,6 +25,13 @@ type CriarTicketDTO = {
   telefoneCliente?: string;
   emailCliente?: string;
   filaId: string;
+}
+
+type CriarTicketRemotoDTO = {
+  clienteId: string;
+  restauranteSlug: string;
+  prioridade: PrioridadeTicket;
+  quantidadePessoas: number;
 }
 
 type AtorDTO = {
@@ -152,6 +161,197 @@ export class TicketService {
     return { posicao, tempoEstimado };
   }
 
+
+  // FUNÇÃO: Criar Ticket Remoto (Cliente APP)
+  static async criarTicketRemoto(dados: CriarTicketRemotoDTO): Promise<TicketComPosicao> {
+    const { clienteId, restauranteSlug, prioridade, quantidadePessoas } = dados;
+
+    // 1. Validar cliente (não bloqueado, buscar dados de contato e status VIP)
+    const cliente = await prisma.cliente.findUnique({
+      where: { id: clienteId },
+      select: {
+        id: true,
+        nomeCompleto: true,
+        telefone: true,
+        email: true,
+        bloqueado: true,
+        isVip: true
+      }
+    });
+
+    if (!cliente) {
+      throw new ErroNaoEncontrado('Cliente não encontrado.');
+    }
+
+    if (cliente.bloqueado) {
+      throw new ErroNaoAutenticado('Sua conta está bloqueada. Entre em contato com o suporte.');
+    }
+
+    // 2. Buscar restaurante pelo slug
+    const restaurante = await prisma.restaurante.findFirst({
+      where: { 
+        slug: restauranteSlug,
+        status: 'ATIVO' 
+      },
+      select: {
+        id: true,
+        nome: true,
+        precoFastLane: true,
+        precoVip: true,
+        maxReentradasPorDia: true
+      }
+    });
+
+    if (!restaurante) {
+      throw new ErroNaoEncontrado('Restaurante não encontrado ou inativo.');
+    }
+
+    // 3. Verificar se cliente já tem ticket ativo neste restaurante
+    const ticketAtivo = await prisma.ticket.findFirst({
+      where: {
+        clienteId,
+        restauranteId: restaurante.id,
+        status: { in: [StatusTicket.AGUARDANDO, StatusTicket.CHAMADO] }
+      }
+    });
+
+    if (ticketAtivo) {
+      throw new ErroDadosInvalidos('Você já possui um ticket ativo neste restaurante.');
+    }
+
+    // 4. Buscar fila padrão ("Principal") do restaurante
+    const fila = await prisma.fila.findFirst({
+      where: {
+        restauranteId: restaurante.id,
+        slug: 'principal',
+        status: StatusFila.ATIVA
+      }
+    });
+
+    if (!fila) {
+      throw new ErroNaoEncontrado('Este restaurante não está aceitando novos tickets no momento.');
+    }
+
+    // 5. Validar capacidade da fila
+    const ticketsAtivos = await prisma.ticket.count({
+      where: { 
+        filaId: fila.id, 
+        status: { in: [StatusTicket.AGUARDANDO, StatusTicket.CHAMADO] } 
+      }
+    });
+    
+    if (ticketsAtivos >= fila.maxSimultaneos) {
+      throw new ErroDadosInvalidos(`Fila cheia. Capacidade máxima: ${fila.maxSimultaneos} pessoas.`);
+    }
+
+    // 6. Validar limite de reentradas diárias
+    const inicioHoje = new Date();
+    inicioHoje.setHours(0, 0, 0, 0);
+    
+    const ticketsHoje = await prisma.ticket.count({
+      where: {
+        restauranteId: restaurante.id,
+        clienteId,
+        criadoEm: { gte: inicioHoje }
+      }
+    });
+    
+    if (ticketsHoje >= restaurante.maxReentradasPorDia) {
+      throw new ErroDadosInvalidos('Limite de reentradas diárias atingido para este restaurante.');
+    }
+
+    // 7. Calcular valorPrioridade com base na prioridade selecionada e status VIP
+    let valorPrioridade = 0;
+    
+    if (prioridade === PrioridadeTicket.FAST_LANE) {
+      const precoFastLane = Number(restaurante.precoFastLane);
+      valorPrioridade = cliente.isVip 
+        ? precoFastLane * 0.5 
+        : precoFastLane;
+    } else if (prioridade === PrioridadeTicket.VIP) {
+      valorPrioridade = cliente.isVip ? 0 : Number(restaurante.precoVip);
+    }
+
+    // 8. Gerar número do ticket e criar registro
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    const novoTicket = await prisma.$transaction(async (tx) => {
+      const ultimoTicket = await tx.ticket.findFirst({
+        where: { filaId: fila.id, criadoEm: { gte: hoje } },
+        orderBy: { numeroTicket: 'desc' },
+        select: { numeroTicket: true }
+      });
+
+      let proximoNumero = 1;
+      if (ultimoTicket) {
+        const match = ultimoTicket.numeroTicket.match(/A-(\d+)/);
+        if (match) {
+          proximoNumero = parseInt(match[1]) + 1;
+        }
+      }
+
+      const numeroTicket = `A-${proximoNumero.toString().padStart(3, '0')}`;
+
+      // CREATE do ticket
+      const ticket = await tx.ticket.create({
+        data: {
+          nomeCliente: cliente.nomeCompleto,
+          telefoneCliente: cliente.telefone,
+          emailCliente: cliente.email,
+          clienteId: cliente.id,
+          filaId: fila.id,
+          restauranteId: restaurante.id,
+          status: StatusTicket.AGUARDANDO,
+          prioridade,
+          tipoEntrada: TipoEntrada.REMOTO,
+          valorPrioridade,
+          numeroTicket,
+          aceitaWhatsapp: true,
+          aceitaSms: true,
+          aceitaEmail: true,
+        },
+        include: {
+          fila: {
+            select: { id: true, nome: true, slug: true, status: true }
+          }
+        }
+      });
+
+      // CREATE do evento
+      await tx.eventoTicket.create({
+        data: {
+          ticketId: ticket.id,
+          restauranteId: restaurante.id,
+          tipo: TipoEventoTicket.CRIADO,
+          tipoAtor: TipoAtor.CLIENTE,
+          atorId: cliente.id,
+          metadados: { 
+            numeroTicket, 
+            prioridade,
+            tipoEntrada: TipoEntrada.REMOTO,
+            valorPrioridade,
+            isVip: cliente.isVip
+          }
+        }
+      });
+
+      return ticket;
+    });
+
+    // 9. Calcular posição e tempo estimado
+    const { posicao, tempoEstimado } = await this.calcularPosicao(novoTicket.id);
+
+    logger.info({ 
+      ticketId: novoTicket.id, 
+      clienteId, 
+      restauranteId: restaurante.id,
+      prioridade,
+      valorPrioridade
+    }, 'Ticket remoto criado');
+
+    return { ...novoTicket, posicao, tempoEstimado };
+  }
 
   // FUNÇÃO: Criar Ticket 
   static async criarTicketLocal(dados: CriarTicketDTO, ator: AtorDTO): Promise<Ticket & { fila: any }> {
@@ -455,6 +655,82 @@ export class TicketService {
     return { ...ticket, posicao, tempoEstimado };
   }
 
+  // FUNÇÃO: Buscar Ticket Ativo do Cliente (APP)
+  static async buscarMeuTicket(clienteId: string): Promise<TicketComPosicao | null> {
+    const ticket = await prisma.ticket.findFirst({
+      where: {
+        clienteId,
+        status: { in: [StatusTicket.AGUARDANDO, StatusTicket.CHAMADO] }
+      },
+      include: {
+        fila: {
+          select: { id: true, nome: true, slug: true, status: true }
+        },
+        restaurante: {
+          select: { id: true, nome: true, slug: true }
+        }
+      },
+      orderBy: { criadoEm: 'desc' }
+    });
+
+    if (!ticket) {
+      return null;
+    }
+
+    const { posicao, tempoEstimado } = await this.calcularPosicao(ticket.id);
+
+    return { ...ticket, posicao, tempoEstimado };
+  }
+
+  // FUNÇÃO: Cliente Cancelar Seu Próprio Ticket (APP)
+  static async cancelarMeuTicket(ticketId: string, clienteId: string): Promise<Ticket> {
+    // 1. Buscar ticket e validar ownership
+    const ticket = await prisma.ticket.findUnique({
+      where: { id: ticketId },
+      include: { fila: true }
+    });
+
+    if (!ticket) {
+      throw new ErroNaoEncontrado('Ticket não encontrado.');
+    }
+
+    if (ticket.clienteId !== clienteId) {
+      throw new ErroDadosInvalidos('Você não tem permissão para cancelar este ticket.');
+    }
+
+    if (ticket.status !== StatusTicket.AGUARDANDO && ticket.status !== StatusTicket.CHAMADO) {
+      throw new ErroDadosInvalidos('Apenas tickets aguardando ou chamados podem ser cancelados.');
+    }
+
+    // 2. Cancelar ticket
+    const ticketAtualizado = await prisma.$transaction(async (tx) => {
+      const atualizado = await tx.ticket.update({
+        where: { id: ticketId },
+        data: {
+          status: StatusTicket.CANCELADO,
+          canceladoEm: new Date()
+        },
+        include: { fila: true }
+      });
+
+      await tx.eventoTicket.create({
+        data: {
+          ticketId,
+          restauranteId: ticket.restauranteId,
+          tipo: TipoEventoTicket.CANCELADO,
+          tipoAtor: TipoAtor.CLIENTE,
+          atorId: clienteId,
+          metadados: { canceladoPor: 'CLIENTE' }
+        }
+      });
+
+      return atualizado;
+    });
+
+    logger.info({ ticketId, clienteId }, 'Ticket cancelado pelo cliente');
+    return ticketAtualizado;
+  }
+
   // AÇÕES DO OPERADOR
   static async chamar(ticketId: string, ator: AtorDTO): Promise<Ticket> {
     const ticket = await this.validarTicketRestaurante(ticketId, ator.restauranteId);
@@ -486,6 +762,40 @@ export class TicketService {
     });
 
     logger.info({ ticketId }, 'Ticket chamado');
+
+    // Enviar notificação por email (assíncrono)
+    if (ticketAtualizado.emailCliente && ticketAtualizado.aceitaEmail) {
+      // Buscar dados do restaurante
+      const restaurante = await prisma.restaurante.findUnique({
+        where: { id: ticketAtualizado.restauranteId },
+        select: {
+          id: true,
+          nome: true,
+          cidade: true,
+          estado: true
+        }
+      });
+
+      if (restaurante) {
+        const enderecoCompleto = `${restaurante.cidade} - ${restaurante.estado}`;
+
+        notificacaoService.enviarChamado({
+          ticketId: ticketAtualizado.id,
+          clienteId: ticketAtualizado.clienteId || undefined,
+          nomeCliente: ticketAtualizado.nomeCliente,
+          emailCliente: ticketAtualizado.emailCliente,
+          numeroTicket: ticketAtualizado.numeroTicket,
+          nomeRestaurante: restaurante.nome,
+          restauranteId: ticketAtualizado.restauranteId,
+          prioridade: ticketAtualizado.prioridade,
+          valorPrioridade: Number(ticketAtualizado.valorPrioridade),
+          enderecoRestaurante: enderecoCompleto
+        }).catch((error) => {
+          logger.error({ error, ticketId }, 'Falha ao enviar notificação de chamado');
+        });
+      }
+    }
+
     return ticketAtualizado;
   }
 
@@ -597,6 +907,15 @@ export class TicketService {
     return ticketAtualizado;
   }
 
+  /**
+   * Finalizar Ticket
+   * 
+   * Status FINALIZADO significa:
+   * - Cliente foi atendido com sucesso
+   * - Cliente pagou a conta COMPLETA presencialmente (incluindo taxa de prioridade se houver)
+   * - Não há necessidade de pagamento online via gateway
+   * - Pagamento é confirmado no momento da finalização
+   */
   static async finalizar(ticketId: string, ator: AtorDTO, observacoes?: string): Promise<Ticket> {
     const ticket = await this.validarTicketRestaurante(ticketId, ator.restauranteId);
 
@@ -621,6 +940,43 @@ export class TicketService {
         },
         include: { fila: true }
       });
+
+      // Se ticket tem clienteId, atualizar estatísticas do cliente
+      if (ticket.clienteId) {
+        logger.info({ 
+          clienteId: ticket.clienteId, 
+          ticketId,
+          prioridade: ticket.prioridade 
+        }, 'Cliente identificado - atualizando estatísticas');
+        
+        const incrementos: any = {
+          totalVisitas: { increment: 1 }
+        };
+
+        // Incrementar contadores específicos de prioridade
+        if (ticket.prioridade === PrioridadeTicket.FAST_LANE) {
+          incrementos.totalFastLane = { increment: 1 };
+          logger.info({ clienteId: ticket.clienteId }, 'Incrementando totalFastLane');
+        } else if (ticket.prioridade === PrioridadeTicket.VIP) {
+          incrementos.totalVip = { increment: 1 };
+          logger.info({ clienteId: ticket.clienteId }, 'Incrementando totalVip');
+        }
+
+        await tx.cliente.update({
+          where: { id: ticket.clienteId },
+          data: incrementos
+        });
+
+        logger.info({ 
+          clienteId: ticket.clienteId, 
+          ticketId,
+          prioridade: ticket.prioridade,
+          incrementos
+        }, 'Estatísticas do cliente atualizadas após finalização');
+      } else {
+        logger.info({ ticketId }, 'Ticket sem clienteId - estatísticas não atualizadas');
+      }
+
       await tx.eventoTicket.create({
         data: {
           ticketId,
@@ -628,13 +984,17 @@ export class TicketService {
           tipo: TipoEventoTicket.FINALIZADO,
           tipoAtor: ator.papel === PapelUsuario.ADMIN ? TipoAtor.ADMIN : TipoAtor.OPERADOR,
           atorId: ator.id,
-          metadados: { duracaoAtendimento }
+          metadados: { 
+            duracaoAtendimento,
+            valorPrioridade: Number(ticket.valorPrioridade),
+            pagamentoConfirmado: true // Pagamento realizado presencialmente
+          }
         }
       });
       return atualizado;
     });
 
-    logger.info({ ticketId }, 'Atendimento finalizado');
+    logger.info({ ticketId, clienteId: ticket.clienteId }, 'Atendimento finalizado - pagamento confirmado presencialmente');
     return ticketAtualizado;
   }
 

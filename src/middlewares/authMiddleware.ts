@@ -3,20 +3,6 @@ import { PapelUsuario } from '@prisma/client';
 import { ErroNaoAutenticado, ErroProibido } from '../utils/ErrosCustomizados';
 import * as authService from '../services/authService';
 
-// Estende o Request do Express 
-declare global {
-  namespace Express {
-    export interface Request {
-      usuario: {
-        id: string;
-        restauranteId: string;
-        papel: PapelUsuario;
-        status: string;
-      };
-    }
-  }
-}
-
 export const autenticar = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
@@ -35,6 +21,9 @@ export const autenticar = async (req: Request, res: Response, next: NextFunction
 export const autorizarPapeis = (papeisPermitdos: PapelUsuario[]) => {
     return ( req: Request, res: Response, next: NextFunction) => {
         try {
+            if (!req.usuario) {
+                throw new ErroNaoAutenticado();
+            }
             const { papel } = req.usuario;
 
             if (!papeisPermitdos.includes(papel)) {

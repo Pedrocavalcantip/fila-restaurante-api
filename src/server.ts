@@ -3,6 +3,7 @@ import { Server } from 'socket.io';
 import app from './app';
 import { logger } from './config/logger';
 import prisma from './config/database';
+import { SocketService } from './services/socketService';
 
 const PORT = process.env.PORT || 3000;
 
@@ -32,16 +33,44 @@ io.of(/^\/restaurante\/[\w-]+$/).on('connection', (socket) => {
   // Cliente entra na sala do restaurante
   socket.join(`restaurante:${restauranteId}`);
 
-  // Cliente pode entrar em sala específica de uma fila
+  // OPERADOR: Cliente pode entrar em sala específica de uma fila
   socket.on('entrar-fila', (filaId: string) => {
     socket.join(`fila:${filaId}`);
-    logger.info({ socketId: socket.id, filaId }, 'Cliente entrou na sala da fila');
+    logger.info({ socketId: socket.id, filaId }, 'Operador entrou na sala da fila');
   });
 
-  // Cliente sai da sala da fila
+  // OPERADOR: Cliente sai da sala da fila
   socket.on('sair-fila', (filaId: string) => {
     socket.leave(`fila:${filaId}`);
-    logger.info({ socketId: socket.id, filaId }, 'Cliente saiu da sala da fila');
+    logger.info({ socketId: socket.id, filaId }, 'Operador saiu da sala da fila');
+  });
+
+  // CLIENTE APP: Entrar na sala do ticket para receber notificações
+  socket.on('entrar-ticket', async (dados: { ticketId: string; clienteId?: string }) => {
+    const { ticketId, clienteId } = dados;
+    
+    if (!ticketId) {
+      socket.emit('erro', { 
+        mensagem: 'ticketId é obrigatório',
+        codigo: 'DADOS_INVALIDOS' 
+      });
+      return;
+    }
+
+    await SocketService.validarEEntrarNaSalaTicket(socket, ticketId, clienteId);
+  });
+
+  // CLIENTE APP: Sair da sala do ticket
+  socket.on('sair-ticket', (ticketId: string) => {
+    if (ticketId) {
+      socket.leave(`ticket:${ticketId}`);
+      logger.info({ socketId: socket.id, ticketId }, 'Cliente saiu da sala do ticket');
+      
+      socket.emit('ticket:saiu', { 
+        ticketId,
+        timestamp: new Date().toISOString()
+      });
+    }
   });
 
   socket.on('disconnect', () => {
@@ -52,9 +81,9 @@ io.of(/^\/restaurante\/[\w-]+$/).on('connection', (socket) => {
 async function testDatabaseConnection() {
   try {
     await prisma.$connect();
-    logger.info('✅ Conexão com PostgreSQL estabelecida');
+    logger.info(' Conexão com PostgreSQL estabelecida');
   } catch (error) {
-    logger.error('❌ Erro ao conectar com PostgreSQL:');
+    logger.error(' Erro ao conectar com PostgreSQL:');
     logger.error(error);
     process.exit(1);
   }
@@ -64,17 +93,16 @@ async function startServer() {
   await testDatabaseConnection();
 
   httpServer.listen(PORT, () => {
-    logger.info(`🚀 Servidor rodando na porta ${PORT}`);
-    logger.info(`🔗 Health check: http://localhost:${PORT}/health`);
-    logger.info(`🌍 Ambiente: ${process.env.NODE_ENV}`);
-    logger.info(`⚡ Socket.io configurado com namespaces por restaurante`);
+    logger.info(`Servidor rodando na porta ${PORT}`);
+    logger.info(`Health check: http://localhost:${PORT}/health`);
+    logger.info(`Socket.io configurado com namespaces por restaurante`);
   });
 }
 
 startServer();
 
 process.on('SIGINT', async () => {
-  logger.info('⚠️  Encerrando servidor...');
+  logger.info('Encerrando servidor...');
   io.close();
   await prisma.$disconnect();
   process.exit(0);

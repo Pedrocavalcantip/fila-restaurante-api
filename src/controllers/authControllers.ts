@@ -1,20 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { loginSchema } from '../utils/schemasZod';
 import * as authService from '../services/authService'; 
-import { PapelUsuario } from '@prisma/client';
-
-declare global {
-  namespace Express {
-    export interface Request {
-      usuario: {
-        id: string;
-        restauranteId: string;
-        papel: PapelUsuario;
-        status: string;
-      };
-    }
-  }
-}
 
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   try {

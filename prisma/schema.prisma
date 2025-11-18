@@ -2,93 +2,74 @@ generator client {
   provider = "prisma-client-js"
 }
 
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+datasource 
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
 model Restaurante {
-  id        String   @id @default(uuid())
-  nome      String
-  slug      String   @unique
-  cidade    String?
-  estado    String?
-  fusoHorario String   @default("America/Sao_Paulo")
-  idioma    String   @default("pt-BR")
-  status    StatusRestaurante @default(ATIVO)
-  
-  horariosFuncionamento Json?
-  
-  toleranciaNoShow    Int     @default(10)
-  avisosNoShow        Int     @default(2)
-  penalidadeNoShow    Int     @default(0)
-  maxReentradasPorDia Int     @default(3)
-  permiteFastLane     Boolean @default(false)
-  
-  precoFastLane Decimal @default(17.00) @db.Decimal(10, 2)
-  precoVip      Decimal @default(28.00) @db.Decimal(10, 2)
-  
-  smsAtivado       Boolean @default(true)
-  whatsappAtivado  Boolean @default(false)
-  emailAtivado     Boolean @default(true)
-  pushAtivado      Boolean @default(true)
-  
-  maxTicketsPorHora      Int @default(100)
-  maxConexoesSimultaneas Int @default(1000)
-  
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
-  
-  // Relações
-  filas         Fila[]
-  tickets       Ticket[]
-  clientes      Cliente[]
-  usuarios      Usuario[]
-  notificacoes  Notificacao[]
-  pagamentos    Pagamento[]
-  webhooks      Webhook[]
-  templates     TemplatesMensagem[]
-  eventosTicket EventoTicket[]
+  id                     String              @id @default(uuid())
+  nome                   String
+  slug                   String              @unique
+  cidade                 String?
+  estado                 String?
+  fusoHorario            String              @default("America/Sao_Paulo")
+  idioma                 String              @default("pt-BR")
+  status                 StatusRestaurante   @default(ATIVO)
+  horariosFuncionamento  Json?
+  toleranciaNoShow       Int                 @default(10)
+  avisosNoShow           Int                 @default(2)
+  penalidadeNoShow       Int                 @default(0)
+  maxReentradasPorDia    Int                 @default(3)
+  permiteFastLane        Boolean             @default(false)
+  smsAtivado             Boolean             @default(true)
+  whatsappAtivado        Boolean             @default(false)
+  emailAtivado           Boolean             @default(true)
+  pushAtivado            Boolean             @default(true)
+  maxTicketsPorHora      Int                 @default(100)
+  maxConexoesSimultaneas Int                 @default(1000)
+  criadoEm               DateTime            @default(now())
+  atualizadoEm           DateTime            @updatedAt
+  precoFastLane          Decimal             @default(17.00) @db.Decimal(10, 2)
+  precoVip               Decimal             @default(28.00) @db.Decimal(10, 2)
+  clientes               Cliente[]
+  eventosTicket          EventoTicket[]
+  filas                  Fila[]
+  notificacoes           Notificacao[]
+  pagamentos             Pagamento[]
+  templates              TemplatesMensagem[]
+  tickets                Ticket[]
+  usuarios               Usuario[]
+  webhooks               Webhook[]
 
+  @@index([cidade, estado])
   @@map("restaurantes")
 }
 
-enum StatusRestaurante {
-  ATIVO
-  SUSPENSO
-  INATIVO
-}
-
 model Cliente {
-  id              String   @id @default(uuid())
-  restauranteId   String
-  restaurante     Restaurante @relation(fields: [restauranteId], references: [id])
-  
-  nomeCompleto    String
-  telefone        String
-  email           String
-  
-  cidade          String
-  estado          String
-  
-  totalVisitas    Int      @default(0)
-  totalNoShows    Int      @default(0)
-  totalFastLane   Int      @default(0)
-  totalVip        Int      @default(0)
-  
-  isVip           Boolean  @default(false)
-  vipDesde        DateTime?
-  
-  bloqueado       Boolean  @default(false)
-  motivoBloqueio  String?
-  
-  criadoEm        DateTime @default(now())
-  atualizadoEm    DateTime @updatedAt
-  
-  // Relações
-  tickets         Ticket[]
-  
+  id             String      @id @default(uuid())
+  restauranteId  String
+  nomeCompleto   String
+  telefone       String
+  email          String
+  cidade         String
+  estado         String
+  totalVisitas   Int         @default(0)
+  totalNoShows   Int         @default(0)
+  totalFastLane  Int         @default(0)
+  totalVip       Int         @default(0)
+  isVip          Boolean     @default(false)
+  vipDesde       DateTime?
+  bloqueado      Boolean     @default(false)
+  motivoBloqueio String?
+  criadoEm       DateTime    @default(now())
+  atualizadoEm   DateTime    @updatedAt
+  senhaHash      String
+  ultimoLoginEm  DateTime?
+  restaurante    Restaurante @relation(fields: [restauranteId], references: [id])
+  tickets        Ticket[]
+
   @@unique([restauranteId, telefone])
   @@unique([restauranteId, email])
   @@index([telefone])
@@ -98,37 +79,216 @@ model Cliente {
 }
 
 model Fila {
-  id            String @id @default(uuid())
-  restauranteId String
-  restaurante   Restaurante @relation(fields: [restauranteId], references: [id]) 
-  
-  nome      String
-  descricao String?
-  slug      String
-  
-  politicaOrdem PoliticaOrdemFila @default(FIFO)
-  
-  maxSimultaneos    Int @default(50)
-  maxEntradasPorHora Int @default(100)
-  
-  horariosEspecificos Json?
-  
-  fastLaneAtivado        Boolean @default(false)
-  fastLanePreco          Decimal @default(0) @db.Decimal(10, 2)
-  fastLaneMaxPorcentagem Int     @default(20)
-  
-  rotuloPublico String?
-  
-  status StatusFila @default(ATIVA)
-  
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
-  
-  // Relações
-  tickets Ticket[]
+  id                     String            @id @default(uuid())
+  restauranteId          String
+  nome                   String
+  descricao              String?
+  slug                   String
+  politicaOrdem          PoliticaOrdemFila @default(FIFO)
+  maxSimultaneos         Int               @default(50)
+  maxEntradasPorHora     Int               @default(100)
+  horariosEspecificos    Json?
+  fastLaneAtivado        Boolean           @default(false)
+  fastLanePreco          Decimal           @default(0) @db.Decimal(10, 2)
+  fastLaneMaxPorcentagem Int               @default(20)
+  rotuloPublico          String?
+  status                 StatusFila        @default(ATIVA)
+  criadoEm               DateTime          @default(now())
+  atualizadoEm           DateTime          @updatedAt
+  restaurante            Restaurante       @relation(fields: [restauranteId], references: [id])
+  tickets                Ticket[]
 
   @@unique([restauranteId, slug])
   @@map("filas")
+}
+
+model Ticket {
+  id                 String           @id @default(uuid())
+  restauranteId      String
+  filaId             String
+  status             StatusTicket     @default(AGUARDANDO)
+  prioridade         PrioridadeTicket @default(NORMAL)
+  rotuloPublico      String?
+  numeroTicket       String
+  nomeCliente        String
+  telefoneCliente    String?
+  emailCliente       String?
+  aceitaSms          Boolean          @default(true)
+  aceitaWhatsapp     Boolean          @default(false)
+  aceitaEmail        Boolean          @default(true)
+  aceitaPush         Boolean          @default(false)
+  contagemNoShow     Int              @default(0)
+  contagemReentrada  Int              @default(0)
+  contagemRechamada  Int              @default(0)
+  entradaEm          DateTime         @default(now())
+  checkInEm          DateTime?
+  chamadoEm          DateTime?
+  atendidoEm         DateTime?
+  finalizadoEm       DateTime?
+  canceladoEm        DateTime?
+  observacoes        String?
+  categoriaServico   String?
+  duracaoAtendimento Int?
+  pagamentoId        String?
+  criadoEm           DateTime         @default(now())
+  atualizadoEm       DateTime         @updatedAt
+  clienteId          String?
+  tipoEntrada        TipoEntrada      @default(LOCAL)
+  valorPrioridade    Decimal          @default(0) @db.Decimal(10, 2)
+  eventos            EventoTicket[]
+  notificacoes       Notificacao[]
+  cliente            Cliente?         @relation(fields: [clienteId], references: [id])
+  fila               Fila             @relation(fields: [filaId], references: [id])
+  pagamento          Pagamento?       @relation(fields: [pagamentoId], references: [id])
+  restaurante        Restaurante      @relation(fields: [restauranteId], references: [id])
+
+  @@unique([filaId, numeroTicket])
+  @@index([restauranteId, status])
+  @@index([filaId, status, prioridade])
+  @@index([filaId, status, entradaEm])
+  @@index([restauranteId, telefoneCliente, criadoEm])
+  @@index([clienteId])
+  @@map("tickets")
+}
+
+model EventoTicket {
+  id            String           @id @default(uuid())
+  ticketId      String
+  restauranteId String
+  tipo          TipoEventoTicket
+  tipoAtor      TipoAtor
+  atorId        String?
+  metadados     Json?
+  criadoEm      DateTime         @default(now())
+  restaurante   Restaurante      @relation(fields: [restauranteId], references: [id])
+  ticket        Ticket           @relation(fields: [ticketId], references: [id])
+
+  @@index([ticketId])
+  @@index([restauranteId, tipo, criadoEm])
+  @@map("eventos_ticket")
+}
+
+model Usuario {
+  id                 String        @id @default(uuid())
+  restauranteId      String
+  nome               String
+  email              String        @unique
+  senha              String
+  papel              PapelUsuario
+  status             StatusUsuario @default(ATIVO)
+  doisFatoresAtivado Boolean       @default(false)
+  segredoDoisFatores String?
+  ultimoLoginEm      DateTime?
+  criadoEm           DateTime      @default(now())
+  atualizadoEm       DateTime      @updatedAt
+  restaurante        Restaurante   @relation(fields: [restauranteId], references: [id])
+
+  @@index([restauranteId, papel])
+  @@map("usuarios")
+}
+
+model Notificacao {
+  id               String            @id @default(uuid())
+  restauranteId    String
+  ticketId         String
+  canal            CanalNotificacao
+  template         String
+  conteudo         String
+  status           StatusNotificacao @default(PENDENTE)
+  destinatario     String
+  provedorId       String?
+  respostaProvedor Json?
+  enviadoEm        DateTime?
+  entregueEm       DateTime?
+  falhouEm         DateTime?
+  criadoEm         DateTime          @default(now())
+  atualizadoEm     DateTime          @updatedAt
+  restaurante      Restaurante       @relation(fields: [restauranteId], references: [id])
+  ticket           Ticket            @relation(fields: [ticketId], references: [id])
+
+  @@index([ticketId])
+  @@index([restauranteId, status])
+  @@map("notificacoes")
+}
+
+model Pagamento {
+  id                  String          @id @default(uuid())
+  restauranteId       String
+  provedor            String
+  valor               Decimal         @db.Decimal(10, 2)
+  moeda               String          @default("BRL")
+  metodo              MetodoPagamento
+  status              StatusPagamento @default(PENDENTE)
+  pagamentoIdProvedor String?
+  dadosProvedor       Json?
+  valorReembolsado    Decimal?        @db.Decimal(10, 2)
+  reembolsadoEm       DateTime?
+  motivoReembolso     String?
+  criadoEm            DateTime        @default(now())
+  atualizadoEm        DateTime        @updatedAt
+  restaurante         Restaurante     @relation(fields: [restauranteId], references: [id])
+  tickets             Ticket[]
+
+  @@index([restauranteId, status])
+  @@index([pagamentoIdProvedor])
+  @@map("pagamentos")
+}
+
+model Webhook {
+  id            String           @id @default(uuid())
+  restauranteId String
+  url           String
+  segredo       String
+  eventos       String[]
+  status        StatusWebhook    @default(ATIVO)
+  criadoEm      DateTime         @default(now())
+  atualizadoEm  DateTime         @updatedAt
+  entregas      EntregaWebhook[]
+  restaurante   Restaurante      @relation(fields: [restauranteId], references: [id])
+
+  @@map("webhooks")
+}
+
+model EntregaWebhook {
+  id           String               @id @default(uuid())
+  webhookId    String
+  evento       String
+  tentativas   Int                  @default(0)
+  status       StatusEntregaWebhook @default(PENDENTE)
+  payload      Json
+  resposta     Json?
+  codigoStatus Int?
+  mensagemErro String?
+  enviadoEm    DateTime?
+  sucessoEm    DateTime?
+  falhouEm     DateTime?
+  criadoEm     DateTime             @default(now())
+  atualizadoEm DateTime             @updatedAt
+  webhook      Webhook              @relation(fields: [webhookId], references: [id])
+
+  @@index([webhookId, status])
+  @@map("entregas_webhook")
+}
+
+model TemplatesMensagem {
+  id            String      @id @default(uuid())
+  restauranteId String
+  chave         String
+  idioma        String      @default("pt-BR")
+  assunto       String?
+  conteudo      String
+  variaveis     String[]    @default([])
+  atualizadoEm  DateTime    @updatedAt
+  restaurante   Restaurante @relation(fields: [restauranteId], references: [id])
+
+  @@unique([restauranteId, chave, idioma])
+  @@map("templates_mensagem")
+}
+
+enum StatusRestaurante {
+  ATIVO
+  SUSPENSO
+  INATIVO
 }
 
 enum PoliticaOrdemFila {
@@ -149,69 +309,6 @@ enum TipoEntrada {
   REMOTO
 }
 
-model Ticket {
-  id            String @id @default(uuid())
-  restauranteId String
-  restaurante   Restaurante @relation(fields: [restauranteId], references: [id]) 
-  filaId        String
-  fila          Fila   @relation(fields: [filaId], references: [id]) 
-  
-  clienteId     String?
-  cliente       Cliente? @relation(fields: [clienteId], references: [id])
-  
-  tipoEntrada    TipoEntrada      @default(LOCAL)
-  valorPrioridade Decimal         @default(0) @db.Decimal(10, 2)
-  
-  status     StatusTicket     @default(AGUARDANDO)
-  prioridade PrioridadeTicket @default(NORMAL)
-  
-  
-  rotuloPublico String?
-  numeroTicket  String
-  
-  nomeCliente     String
-  telefoneCliente String?
-  emailCliente    String?
-  
-  aceitaSms      Boolean @default(true)
-  aceitaWhatsapp Boolean @default(false)
-  aceitaEmail    Boolean @default(true)
-  aceitaPush     Boolean @default(false)
-  
-  contagemNoShow    Int @default(0)
-  contagemReentrada Int @default(0)
-  contagemRechamada Int @default(0)
-  
-  entradaEm    DateTime  @default(now())
-  checkInEm    DateTime?
-  chamadoEm    DateTime?
-  atendidoEm   DateTime?
-  finalizadoEm DateTime?
-  canceladoEm  DateTime?
-  
-  observacoes        String?
-  categoriaServico   String?
-  duracaoAtendimento Int?
-  
-  pagamentoId String?
-  pagamento   Pagamento? @relation(fields: [pagamentoId], references: [id])
-  
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
-  
-  // Relações
-  eventos      EventoTicket[]
-  notificacoes Notificacao[]
-
-  @@unique([filaId, numeroTicket])
-  @@index([restauranteId, status])
-  @@index([filaId, status, prioridade])
-  @@index([filaId, status, entradaEm])
-  @@index([restauranteId, telefoneCliente, criadoEm])
-  @@index([clienteId])
-  @@map("tickets")
-}
-
 enum StatusTicket {
   AGUARDANDO
   CHAMADO
@@ -226,27 +323,6 @@ enum PrioridadeTicket {
   NORMAL
   FAST_LANE
   VIP
-}
-
-model EventoTicket {
-  id            String @id @default(uuid())
-  ticketId      String
-  ticket        Ticket @relation(fields: [ticketId], references: [id]) 
-  restauranteId String
-  restaurante   Restaurante @relation(fields: [restauranteId], references: [id]) 
-  
-  tipo TipoEventoTicket
-  
-  tipoAtor TipoAtor
-  atorId   String?
-  
-  metadados Json?
-  
-  criadoEm DateTime @default(now())
-
-  @@index([ticketId])
-  @@index([restauranteId, tipo, criadoEm])
-  @@map("eventos_ticket")
 }
 
 enum TipoEventoTicket {
@@ -271,30 +347,6 @@ enum TipoAtor {
   SISTEMA
 }
 
-model Usuario {
-  id            String @id @default(uuid())
-  restauranteId String
-  restaurante   Restaurante @relation(fields: [restauranteId], references: [id]) 
-  
-  nome  String
-  email String @unique
-  senha String
-  
-  papel  PapelUsuario
-  status StatusUsuario @default(ATIVO)
-  
-  doisFatoresAtivado Boolean @default(false)
-  segredoDoisFatores String?
-  
-  ultimoLoginEm DateTime?
-  
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
-
-  @@index([restauranteId, papel])
-  @@map("usuarios")
-}
-
 enum PapelUsuario {
   ADMIN
   OPERADOR
@@ -304,36 +356,6 @@ enum StatusUsuario {
   ATIVO
   INATIVO
   SUSPENSO
-}
-
-model Notificacao {
-  id            String @id @default(uuid())
-  restauranteId String
-  restaurante   Restaurante @relation(fields: [restauranteId], references: [id]) 
-  ticketId      String
-  ticket        Ticket @relation(fields: [ticketId], references: [id]) 
-  
-  canal    CanalNotificacao
-  template String
-  conteudo String
-  
-  status StatusNotificacao @default(PENDENTE)
-  
-  destinatario String
-  
-  provedorId       String?
-  respostaProvedor Json?
-  
-  enviadoEm  DateTime?
-  entregueEm DateTime?
-  falhouEm   DateTime?
-  
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
-
-  @@index([ticketId])
-  @@index([restauranteId, status])
-  @@map("notificacoes")
 }
 
 enum CanalNotificacao {
@@ -349,37 +371,6 @@ enum StatusNotificacao {
   ENTREGUE
   FALHOU
   CANCELADO
-}
-
-
-model Pagamento {
-  id            String @id @default(uuid())
-  restauranteId String
-  restaurante   Restaurante @relation(fields: [restauranteId], references: [id]) 
-  
-  tickets Ticket[]
-  
-  provedor String
-  
-  valor  Decimal @db.Decimal(10, 2)
-  moeda  String  @default("BRL")
-  
-  metodo MetodoPagamento
-  status StatusPagamento @default(PENDENTE)
-  
-  pagamentoIdProvedor String?
-  dadosProvedor       Json?
-  
-  valorReembolsado Decimal? @db.Decimal(10, 2)
-  reembolsadoEm    DateTime?
-  motivoReembolso  String?
-  
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
-
-  @@index([restauranteId, status])
-  @@index([pagamentoIdProvedor])
-  @@map("pagamentos")
 }
 
 enum MetodoPagamento {
@@ -399,60 +390,19 @@ enum StatusPagamento {
   CANCELADO
 }
 
-model Webhook {
-  id            String @id @default(uuid())
-  restauranteId String
-  restaurante   Restaurante @relation(fields: [restauranteId], references: [id]) 
-  
-  url     String
-  segredo String
-  
-  eventos String[]
-  
-  status StatusWebhook @default(ATIVO)
-  
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
-  
-  entregas EntregaWebhook[]
-
-  @@map("webhooks")
-}
-
 enum StatusWebhook {
   ATIVO
   INATIVO
   SUSPENSO
 }
 
-model EntregaWebhook {
-  id        String @id @default(uuid())
-  webhookId String
-  webhook   Webhook @relation(fields: [webhookId], references: [id]) 
-  
-  evento    String
-  tentativas Int    @default(0)
-  status    StatusEntregaWebhook @default(PENDENTE)
-  
-  payload      Json
-  resposta     Json?
-  codigoStatus Int?
-  mensagemErro String?
-  
-  enviadoEm DateTime?
-  sucessoEm DateTime?
-  falhouEm  DateTime?
-  
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
-
-  @@index([webhookId, status])
-  @@map("entregas_webhook")
-}
-
 enum StatusEntregaWebhook {
   PENDENTE
   SUCESSO
+  FALHOU
+  TENTANDO_NOVAMENTE
+}
+ESSO
   FALHOU
   TENTANDO_NOVAMENTE
 }

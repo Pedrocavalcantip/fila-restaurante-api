@@ -4,7 +4,7 @@ import { SocketService } from '../services/socketService';
 import { StatusTicket } from '@prisma/client';
 import { ErroDadosInvalidos, ErroNaoAutenticado } from '../utils/ErrosCustomizados';
 import { logger } from '../config/logger';
-import { criarTicketLocalSchema } from '../utils/schemasZod';
+import { criarTicketLocalSchema, entrarNaFilaRemotoSchema } from '../utils/schemasZod';
 
 // HELPERS DE VALIDAÇÃO
 const validarPaginacao = (query: Request['query']) => {
@@ -67,6 +67,142 @@ export class TicketController {
           ...ticket,
           posicao,
           tempoEstimado
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // POST /api/clientes/restaurantes/:slug/fila/entrar
+  // Cliente entra na fila remotamente (APP)
+  static async entrarNaFilaRemoto(req: Request, res: Response, next: NextFunction) {
+    try {
+      // 1. Validar autenticação do cliente
+      const cliente = req.cliente;
+      if (!cliente) throw new ErroNaoAutenticado();
+
+      const { slug } = req.params;
+
+      // 2. Validar body com Zod
+      const { body } = entrarNaFilaRemotoSchema.parse({ body: req.body });
+      const { prioridade, quantidadePessoas } = body;
+
+      // 3. Delegar para o Service
+      const ticketComPosicao = await TicketService.criarTicketRemoto({
+        clienteId: cliente.id,
+        restauranteSlug: slug,
+        prioridade,
+        quantidadePessoas
+      });
+
+      logger.info({ 
+        ticketId: ticketComPosicao.id, 
+        clienteId: cliente.id,
+        prioridade 
+      }, 'Cliente entrou na fila remotamente');
+
+      // 4. Emitir evento Socket.io - fila atualizada
+      SocketService.emitirFilaAtualizada(
+        ticketComPosicao.restauranteId,
+        ticketComPosicao.filaId,
+        [ticketComPosicao]
+      );
+
+      // 5. Responder
+      res.status(201).json({
+        mensagem: 'Você entrou na fila com sucesso!',
+        ticket: {
+          id: ticketComPosicao.id,
+          numeroTicket: ticketComPosicao.numeroTicket,
+          prioridade: ticketComPosicao.prioridade,
+          valorPrioridade: Number(ticketComPosicao.valorPrioridade),
+          tipoEntrada: ticketComPosicao.tipoEntrada,
+          posicao: ticketComPosicao.posicao,
+          tempoEstimado: ticketComPosicao.tempoEstimado,
+          status: ticketComPosicao.status,
+          clienteId: ticketComPosicao.clienteId,
+          nomeCliente: ticketComPosicao.nomeCliente,
+          telefoneCliente: ticketComPosicao.telefoneCliente,
+          emailCliente: ticketComPosicao.emailCliente,
+          restauranteId: ticketComPosicao.restauranteId,
+          criadoEm: ticketComPosicao.criadoEm
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // GET /api/clientes/meu-ticket
+  // Buscar ticket ativo do cliente autenticado
+  static async buscarMeuTicket(req: Request, res: Response, next: NextFunction) {
+    try {
+      const cliente = req.cliente;
+      if (!cliente) throw new ErroNaoAutenticado();
+
+      const ticket = await TicketService.buscarMeuTicket(cliente.id);
+
+      if (!ticket) {
+        return res.status(200).json({
+          mensagem: 'Você não possui tickets ativos no momento',
+          ticket: null
+        });
+      }
+
+      res.status(200).json({
+        ticket: {
+          id: ticket.id,
+          numeroTicket: ticket.numeroTicket,
+          prioridade: ticket.prioridade,
+          valorPrioridade: ticket.valorPrioridade,
+          status: ticket.status,
+          posicao: ticket.posicao,
+          tempoEstimado: ticket.tempoEstimado,
+          restaurante: {
+            id: ticket.restauranteId,
+            nome: (ticket as any).restaurante?.nome
+          },
+          fila: {
+            id: ticket.filaId,
+            nome: (ticket as any).fila?.nome
+          },
+          criadoEm: ticket.criadoEm,
+          chamadoEm: ticket.chamadoEm
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // POST /api/clientes/ticket/:ticketId/cancelar
+  // Cliente cancela seu próprio ticket
+  static async cancelarMeuTicket(req: Request, res: Response, next: NextFunction) {
+    try {
+      const cliente = req.cliente;
+      if (!cliente) throw new ErroNaoAutenticado();
+
+      const { ticketId } = req.params;
+
+      const ticket = await TicketService.cancelarMeuTicket(ticketId, cliente.id);
+
+      logger.info({ ticketId, clienteId: cliente.id }, 'Cliente cancelou seu ticket');
+
+      // Emitir evento Socket.io
+      SocketService.emitirTicketCancelado(
+        ticket.restauranteId,
+        ticket.filaId,
+        ticketId
+      );
+
+      res.status(200).json({
+        mensagem: 'Ticket cancelado com sucesso',
+        ticket: {
+          id: ticket.id,
+          numeroTicket: ticket.numeroTicket,
+          status: ticket.status,
+          canceladoEm: ticket.canceladoEm
         }
       });
     } catch (error) {

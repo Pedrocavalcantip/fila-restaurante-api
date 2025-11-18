@@ -5,6 +5,8 @@ import dotenv from 'dotenv';
 import { logger } from './config/logger';
 import authRoutes from './routes/authRoutes';
 import ticketRoutes from './routes/ticketRoutes';
+import restauranteRoutes from './routes/restauranteRoutes';
+import clienteRoutes from './routes/clienteRoutes';
 import { tratarErros } from './middlewares/erroMiddleware';
 
 dotenv.config();
@@ -38,6 +40,8 @@ app.get('/', (req, res) => {
 
 // Rotas da Aplicação
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/restaurantes', restauranteRoutes);
+app.use('/api/v1/cliente', clienteRoutes);
 app.use('/api/v1/tickets', ticketRoutes);
 app.use(tratarErros); 
 
