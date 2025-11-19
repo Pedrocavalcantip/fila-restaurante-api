@@ -41,9 +41,6 @@ export const cadastroClienteSchema = z.object({
       .trim()
       .length(2, 'Estado deve ter exatamente 2 caracteres')
       .transform(valor => valor.toUpperCase()),
-    restauranteSlug: z.string()
-      .trim()
-      .min(3, 'Slug do restaurante é obrigatório'),
   }),
 });
 
@@ -54,9 +51,6 @@ export const loginClienteSchema = z.object({
       .trim(),
     senha: z.string()
       .min(1, 'Senha é obrigatória'),
-    restauranteSlug: z.string()
-      .trim()
-      .min(3, 'Slug do restaurante é obrigatório'),
   }),
 });
 

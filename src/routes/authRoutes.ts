@@ -19,7 +19,7 @@ const router = Router();
  *         application/json:
  *           schema:
  *             type: object
- *             required: [nome, email, telefone, senha, cidade, estado, restauranteSlug]
+ *             required: [nome, email, telefone, senha, cidade, estado]
  *             properties:
  *               nome: { type: string, example: "Maria Silva" }
  *               email: { type: string, format: email, example: "maria@email.com" }
@@ -28,7 +28,6 @@ const router = Router();
  *               cpf: { type: string, example: "12345678901" }
  *               cidade: { type: string, example: "São Paulo" }
  *               estado: { type: string, example: "SP" }
- *               restauranteSlug: { type: string, example: "restaurante-gourmet" }
  *     responses:
  *       201:
  *         description: Cliente cadastrado com sucesso
@@ -59,11 +58,10 @@ router.post('/cliente/cadastro', generalLimiter, cadastrarCliente);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [email, senha, restauranteSlug]
+ *             required: [email, senha]
  *             properties:
  *               email: { type: string, format: email, example: "maria@email.com" }
  *               senha: { type: string, example: "senha12345" }
- *               restauranteSlug: { type: string, example: "restaurante-gourmet" }
  *     responses:
  *       200:
  *         description: Login bem-sucedido
