@@ -2,7 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import swaggerUi from 'swagger-ui-express';
 import { logger } from './config/logger';
+import { swaggerSpec } from './config/swagger';
 import authRoutes from './routes/authRoutes';
 import ticketRoutes from './routes/ticketRoutes';
 import restauranteRoutes from './routes/restauranteRoutes';
@@ -14,7 +16,9 @@ dotenv.config();
 const app = express();
 
 // Middlewares Globais
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // Permitir Swagger UI carregar estilos
+}));
 app.use(
   cors({
     origin: process.env.FRONTEND_URL || '*',
@@ -23,6 +27,12 @@ app.use(
 );
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Documentação Swagger
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Fila Restaurante API Docs',
+}));
 
 // Rotas de Teste
 app.get('/health', (req, res) => {
@@ -35,7 +45,12 @@ app.get('/health', (req, res) => {
 
 app.get('/', (req, res) => {
   logger.info('Rota raiz acessada');
-  res.json({ message: 'Queue Manager API - Sprint 0 ✅' });
+  res.json({ 
+    message: 'Fila Restaurante API - MVP ',
+    version: '1.0.0',
+    docs: '/api-docs',
+    health: '/health',
+  });
 });
 
 // Rotas da Aplicação

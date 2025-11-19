@@ -17,7 +17,9 @@ export async function criarDadosTesteCliente() {
   // Criar restaurantes de teste
   const restaurante1 = await prisma.restaurante.upsert({
     where: { id: clienteTestIds.restaurante1 },
-    update: {},
+    update: {
+      maxReentradasPorDia: 100, // Limite alto para testes E2E
+    },
     create: {
       id: clienteTestIds.restaurante1,
       nome: 'Restaurante SP Centro',
@@ -25,12 +27,15 @@ export async function criarDadosTesteCliente() {
       status: 'ATIVO',
       cidade: 'São Paulo',
       estado: 'SP',
+      maxReentradasPorDia: 100, // Limite alto para testes E2E
     },
   });
 
   const restaurante2 = await prisma.restaurante.upsert({
     where: { id: clienteTestIds.restaurante2 },
-    update: {},
+    update: {
+      maxReentradasPorDia: 100, // Limite alto para testes E2E
+    },
     create: {
       id: clienteTestIds.restaurante2,
       nome: 'Restaurante SP Zona Sul',
@@ -38,6 +43,7 @@ export async function criarDadosTesteCliente() {
       status: 'ATIVO',
       cidade: 'São Paulo',
       estado: 'SP',
+      maxReentradasPorDia: 100, // Limite alto para testes E2E
     },
   });
 

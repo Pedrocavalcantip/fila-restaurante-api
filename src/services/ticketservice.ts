@@ -851,8 +851,19 @@ export class TicketService {
           status: StatusTicket.NO_SHOW,
           contagemNoShow: { increment: 1 }
         },
-        include: { fila: true }
+        include: { fila: true, cliente: true }
       });
+      
+      // Incrementar totalNoShows do cliente
+      if (atualizado.clienteId) {
+        await tx.cliente.update({
+          where: { id: atualizado.clienteId },
+          data: {
+            totalNoShows: { increment: 1 }
+          }
+        });
+      }
+      
       await tx.eventoTicket.create({
         data: {
           ticketId,

@@ -86,3 +86,7 @@ export const validarTokenEBuscarUsuario = async (token: string) => {
     throw new ErroTokenInvalido(); 
   }
 };
+
+export function login(arg0: { email: string; senha: string; }) {
+    throw new Error('Function not implemented.');
+}

@@ -10,9 +10,9 @@ const SENDGRID_FROM_NAME = process.env.SENDGRID_FROM_NAME || 'Sistema de Filas';
 
 if (SENDGRID_API_KEY) {
   sgMail.setApiKey(SENDGRID_API_KEY);
-  logger.info('✅ SendGrid configurado');
+  logger.info('SendGrid configurado');
 } else {
-  logger.warn('⚠️  SENDGRID_API_KEY não configurada - emails não serão enviados');
+  logger.warn('SENDGRID_API_KEY não configurada - emails não serão enviados');
 }
 
 export type BoasVindasPayload = {
@@ -41,9 +41,25 @@ export type ChamadoPayload = {
 const substituirVariaveis = (template: string, variaveis: Record<string, any>): string => {
   let resultado = template;
   
+  // Substituir variáveis simples {{variavel}}
   Object.entries(variaveis).forEach(([chave, valor]) => {
     const regex = new RegExp(`{{${chave}}}`, 'g');
     resultado = resultado.replace(regex, String(valor || ''));
+  });
+  
+  // Remover blocos condicionais vazios {{#variavel}}...{{/variavel}}
+  Object.entries(variaveis).forEach(([chave, valor]) => {
+    if (!valor || valor === '') {
+      // Remover bloco inteiro se variável vazia
+      const regexBloco = new RegExp(`{{#${chave}}}[\\s\\S]*?{{\\/${chave}}}`, 'g');
+      resultado = resultado.replace(regexBloco, '');
+    } else {
+      // Remover apenas as tags condicionais, manter conteúdo
+      const regexInicio = new RegExp(`{{#${chave}}}`, 'g');
+      const regexFim = new RegExp(`{{\\/${chave}}}`, 'g');
+      resultado = resultado.replace(regexInicio, '');
+      resultado = resultado.replace(regexFim, '');
+    }
   });
   
   return resultado;

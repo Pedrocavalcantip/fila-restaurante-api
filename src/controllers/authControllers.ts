@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { loginSchema } from '../utils/schemasZod';
-import * as authService from '../services/authService'; 
+import * as authService from '../services/authService';
 
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   try {

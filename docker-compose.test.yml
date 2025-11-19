@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: fila-restaurante-test-db
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: fila_test
+    ports:
+      - "5433:5432"
+    # Dados em RAM para máxima velocidade
+    tmpfs:
+      - /var/lib/postgresql/data
+    # Configurações otimizadas para testes (desabilita segurança em troca de velocidade)
+    command: >
+      postgres
+      -c fsync=off
+      -c synchronous_commit=off
+      -c full_page_writes=off
+      -c shared_buffers=256MB
+      -c max_connections=100
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d fila_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
