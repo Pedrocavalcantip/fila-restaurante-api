@@ -19,7 +19,7 @@ const normalizarEmail = (email: string) => email.trim().toLowerCase();
 
 export type ClienteAutenticado = {
   id: string;
-  restauranteId: string;
+  restauranteId: string | null;
   nomeCompleto: string;
   email: string;
   telefone: string;
@@ -60,65 +60,38 @@ type DadosCadastroCliente = {
   senha: string;
   cidade: string;
   estado: string;
-  restauranteSlug: string;
 };
 
 type DadosLoginCliente = {
   email: string;
   senha: string;
-  restauranteSlug: string;
-};
-
-const buscarRestaurantePorSlug = async (slug: string) => {
-  const restaurante = await prisma.restaurante.findUnique({
-    where: { slug },
-    select: { id: true },
-  });
-
-  if (!restaurante) {
-    throw new ErroNaoEncontrado('Restaurante não encontrado.');
-  }
-
-  return restaurante;
 };
 
 export const cadastrarCliente = async (dados: DadosCadastroCliente) => {
   const email = normalizarEmail(dados.email);
   const telefone = dados.telefone;
 
-  const restaurante = await buscarRestaurantePorSlug(dados.restauranteSlug);
-
   const emailExistente = await prisma.cliente.findUnique({
-    where: {
-      restauranteId_email: {
-        restauranteId: restaurante.id,
-        email,
-      },
-    },
+    where: { email },
   });
 
   if (emailExistente) {
-    throw new ErroConflito('Email já cadastrado para este restaurante.');
+    throw new ErroConflito('Email já cadastrado.');
   }
 
   const telefoneExistente = await prisma.cliente.findUnique({
-    where: {
-      restauranteId_telefone: {
-        restauranteId: restaurante.id,
-        telefone,
-      },
-    },
+    where: { telefone },
   });
 
   if (telefoneExistente) {
-    throw new ErroConflito('Telefone já cadastrado para este restaurante.');
+    throw new ErroConflito('Telefone já cadastrado.');
   }
 
   const senhaHash = await bcrypt.hash(dados.senha, BCRYPT_SALT_ROUNDS);
 
   const clienteCriado = await prisma.cliente.create({
     data: {
-      restauranteId: restaurante.id,
+      restauranteId: null,
       nomeCompleto: dados.nomeCompleto.trim(),
       telefone,
       email,
@@ -150,20 +123,7 @@ export const cadastrarCliente = async (dados: DadosCadastroCliente) => {
 
   const token = gerarTokenCliente(clienteCriado.id);
 
-  // Enviar email de boas-vindas (assíncrono)
-  enviarBoasVindas({
-    clienteId: clienteCriado.id,
-    restauranteId: restaurante.id,
-    nomeCompleto: clienteCriado.nomeCompleto,
-    email: clienteCriado.email,
-    telefone: clienteCriado.telefone,
-    cidade: clienteCriado.cidade,
-    estado: clienteCriado.estado,
-  }).catch((error) => {
-    logger.error({ error, clienteId: clienteCriado.id }, 'Falha ao acionar notificacao de boas-vindas para cliente');
-  });
-
-  logger.info({ clienteId: clienteCriado.id, restauranteId: restaurante.id }, 'Cliente cadastrado com sucesso');
+  logger.info({ clienteId: clienteCriado.id }, 'Cliente cadastrado com sucesso (sem vínculo de restaurante)');
 
   return {
     token,
@@ -173,15 +133,9 @@ export const cadastrarCliente = async (dados: DadosCadastroCliente) => {
 
 export const loginCliente = async (dados: DadosLoginCliente) => {
   const email = normalizarEmail(dados.email);
-  const restaurante = await buscarRestaurantePorSlug(dados.restauranteSlug);
 
   const cliente = await prisma.cliente.findUnique({
-    where: {
-      restauranteId_email: {
-        restauranteId: restaurante.id,
-        email,
-      },
-    },
+    where: { email },
     select: {
       id: true,
       restauranteId: true,
@@ -216,7 +170,7 @@ export const loginCliente = async (dados: DadosLoginCliente) => {
   }
 
   if (cliente.bloqueado) {
-    throw new ErroProibido('Conta bloqueada. Entre em contato com o restaurante.');
+    throw new ErroProibido('Conta bloqueada. Entre em contato com o suporte.');
   }
 
   await prisma.cliente.update({
