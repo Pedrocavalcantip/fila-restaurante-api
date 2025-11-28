@@ -301,6 +301,38 @@ router.post('/:ticketId/chamar', operadorLimiter, autenticar, autorizarPapeis([P
 
 /**
  * @swagger
+ * /tickets/{ticketId}/confirmar-presenca:
+ *   post:
+ *     tags: [Tickets Locais (Operador)]
+ *     summary: Confirmar presença do cliente
+ *     description: Operador confirma que o cliente chegou ao restaurante (status CHAMADO → MESA_PRONTA)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: ticketId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Presença confirmada com sucesso (WebSocket emitido)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Ticket'
+ *       400:
+ *         description: Ticket não está chamado
+ *       401:
+ *         description: Token ausente ou inválido
+ *       404:
+ *         description: Ticket não encontrado
+ */
+// POST /api/v1/tickets/:ticketId/confirmar-presenca
+// Confirmar presença do cliente (CHAMADO → MESA_PRONTA)
+router.post('/:ticketId/confirmar-presenca', operadorLimiter, autenticar, autorizarPapeis([PapelUsuario.ADMIN, PapelUsuario.OPERADOR]), TicketController.confirmarPresenca);
+
+/**
+ * @swagger
  * /tickets/{ticketId}/finalizar:
  *   post:
  *     tags: [Tickets Locais (Operador)]

@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "TipoEventoTicket" ADD VALUE 'PRESENCA_CONFIRMADA';

@@ -102,6 +102,9 @@ export const cadastroRestauranteSchema = z.object({
       .length(2, 'Estado deve ter exatamente 2 caracteres')
       .transform(valor => valor.toUpperCase())
       .optional(),
+    imagemUrl: z.string()
+      .url('URL da imagem inválida')
+      .optional(),
     emailAdmin: z.string()
       .email('Email inválido')
       .trim()
@@ -136,16 +139,21 @@ export const atualizarRestauranteSchema = z.object({
       .length(2, 'Estado deve ter exatamente 2 caracteres')
       .transform(valor => valor.toUpperCase())
       .optional(),
-    precoFastLane: z.number()
+    imagemUrl: z.string()
+      .url('URL da imagem inválida')
+      .optional(),
+    imagemPublicId: z.string()
+      .optional(),
+    precoFastLane: z.coerce.number()
       .positive('Preço Fast Lane deve ser positivo')
       .optional(),
-    precoVip: z.number()
+    precoVip: z.coerce.number()
       .positive('Preço VIP deve ser positivo')
       .optional(),
-    permiteFastLane: z.boolean().optional(),
-    toleranciaNoShow: z.number().int().positive().optional(),
-    avisosNoShow: z.number().int().positive().optional(),
-    maxReentradasPorDia: z.number().int().positive().optional(),
+    permiteFastLane: z.coerce.boolean().optional(),
+    toleranciaNoShow: z.coerce.number().int().positive().optional(),
+    avisosNoShow: z.coerce.number().int().positive().optional(),
+    maxReentradasPorDia: z.coerce.number().int().positive().optional(),
   }),
 });
 
@@ -180,7 +188,14 @@ export const criarTicketLocalSchema = z.object({
     .max(100, 'Email muito longo (máximo 100 caracteres)')
     .optional()
     .or(z.literal(''))
-    .transform(val => val === '' ? undefined : val), 
+    .transform(val => val === '' ? undefined : val),
+
+  observacoes: z.string()
+    .max(500, 'Observações muito longas (máximo 500 caracteres)')
+    .trim()
+    .optional()
+    .or(z.literal(''))
+    .transform(val => val === '' ? undefined : val),
 });
 
 export const entrarNaFilaRemotoSchema = z.object({
@@ -194,5 +209,11 @@ export const entrarNaFilaRemotoSchema = z.object({
       .max(20, 'Quantidade máxima é 20 pessoas')
       .optional()
       .default(1),
+    observacoes: z.string()
+      .max(500, 'Observações muito longas (máximo 500 caracteres)')
+      .trim()
+      .optional()
+      .or(z.literal(''))
+      .transform(val => val === '' ? undefined : val),
   }),
 });

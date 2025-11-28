@@ -15,6 +15,7 @@ type DadosCadastroRestaurante = {
   slug: string;
   cidade?: string;
   estado?: string;
+  imagemUrl?: string;
   emailAdmin: string;
   senhaAdmin: string;
   precoFastLane?: number;
@@ -25,6 +26,8 @@ type DadosAtualizacaoRestaurante = {
   nome?: string;
   cidade?: string;
   estado?: string;
+  imagemUrl?: string;
+  imagemPublicId?: string;
   precoFastLane?: number;
   precoVip?: number;
   permiteFastLane?: boolean;
@@ -66,6 +69,7 @@ export const cadastrarRestaurante = async (dados: DadosCadastroRestaurante) => {
         slug: slugNormalizado,
         cidade: dados.cidade?.trim(),
         estado: dados.estado,
+        imagemUrl: dados.imagemUrl,
         precoFastLane: dados.precoFastLane ?? 17.00,
         precoVip: dados.precoVip ?? 28.00,
       },
@@ -174,6 +178,18 @@ export const buscarMeuRestaurante = async (restauranteId: string) => {
       maxConexoesSimultaneas: true,
       criadoEm: true,
       atualizadoEm: true,
+      filas: {
+        select: {
+          id: true,
+          nome: true,
+          slug: true,
+          status: true,
+          maxSimultaneos: true,
+        },
+        orderBy: {
+          criadoEm: 'asc'
+        }
+      },
       _count: {
         select: {
           filas: true,
@@ -182,6 +198,32 @@ export const buscarMeuRestaurante = async (restauranteId: string) => {
           usuarios: true,
         },
       },
+    },
+  });
+
+  if (!restaurante) {
+    throw new ErroNaoEncontrado('Restaurante não encontrado.');
+  }
+
+  return restaurante;
+};
+
+export const buscarRestaurantePorSlug = async (slug: string) => {
+  const slugNormalizado = slug.trim().toLowerCase();
+
+  const restaurante = await prisma.restaurante.findUnique({
+    where: { slug: slugNormalizado },
+    select: {
+      id: true,
+      nome: true,
+      slug: true,
+      cidade: true,
+      estado: true,
+      imagemUrl: true,
+      status: true,
+      precoFastLane: true,
+      precoVip: true,
+      permiteFastLane: true,
     },
   });
 
@@ -214,6 +256,8 @@ export const atualizarRestaurante = async (
       ...(dados.nome && { nome: dados.nome.trim() }),
       ...(dados.cidade !== undefined && { cidade: dados.cidade?.trim() }),
       ...(dados.estado !== undefined && { estado: dados.estado }),
+      ...(dados.imagemUrl !== undefined && { imagemUrl: dados.imagemUrl }),
+      ...(dados.imagemPublicId !== undefined && { imagemPublicId: dados.imagemPublicId }),
       ...(dados.precoFastLane !== undefined && { precoFastLane: dados.precoFastLane }),
       ...(dados.precoVip !== undefined && { precoVip: dados.precoVip }),
       ...(dados.permiteFastLane !== undefined && { permiteFastLane: dados.permiteFastLane }),
@@ -227,6 +271,8 @@ export const atualizarRestaurante = async (
       slug: true,
       cidade: true,
       estado: true,
+      imagemUrl: true,
+      imagemPublicId: true,
       precoFastLane: true,
       precoVip: true,
       permiteFastLane: true,

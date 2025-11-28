@@ -14,6 +14,8 @@ model Restaurante {
   slug                   String              @unique
   cidade                 String?
   estado                 String?
+  imagemUrl              String?
+  imagemPublicId         String?
   fusoHorario            String              @default("America/Sao_Paulo")
   idioma                 String              @default("pt-BR")
   status                 StatusRestaurante   @default(ATIVO)
@@ -48,23 +50,23 @@ model Restaurante {
 }
 
 model Cliente {
-  id             String      @id @default(uuid())
+  id             String       @id @default(uuid())
   restauranteId  String?
   nomeCompleto   String
   telefone       String
   email          String
   cidade         String
   estado         String
-  totalVisitas   Int         @default(0)
-  totalNoShows   Int         @default(0)
-  totalFastLane  Int         @default(0)
-  totalVip       Int         @default(0)
-  isVip          Boolean     @default(false)
+  totalVisitas   Int          @default(0)
+  totalNoShows   Int          @default(0)
+  totalFastLane  Int          @default(0)
+  totalVip       Int          @default(0)
+  isVip          Boolean      @default(false)
   vipDesde       DateTime?
-  bloqueado      Boolean     @default(false)
+  bloqueado      Boolean      @default(false)
   motivoBloqueio String?
-  criadoEm       DateTime    @default(now())
-  atualizadoEm   DateTime    @updatedAt
+  criadoEm       DateTime     @default(now())
+  atualizadoEm   DateTime     @updatedAt
   senhaHash      String
   ultimoLoginEm  DateTime?
   restaurante    Restaurante? @relation(fields: [restauranteId], references: [id])
@@ -314,6 +316,7 @@ enum TipoEntrada {
 enum StatusTicket {
   AGUARDANDO
   CHAMADO
+  MESA_PRONTA
   ATENDENDO
   FINALIZADO
   CANCELADO
@@ -333,6 +336,7 @@ enum TipoEventoTicket {
   CHAMADO
   RECHAMADO
   PULADO
+  PRESENCA_CONFIRMADA
   NO_SHOW
   ATENDENDO
   FINALIZADO

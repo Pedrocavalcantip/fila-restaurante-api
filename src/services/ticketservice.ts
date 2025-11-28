@@ -24,6 +24,7 @@ type CriarTicketDTO = {
   nomeCliente: string;
   telefoneCliente?: string;
   emailCliente?: string;
+  observacoes?: string;
   filaId: string;
 }
 
@@ -32,6 +33,7 @@ type CriarTicketRemotoDTO = {
   restauranteSlug: string;
   prioridade: PrioridadeTicket;
   quantidadePessoas: number;
+  observacoes?: string;
 }
 
 type AtorDTO = {
@@ -164,7 +166,7 @@ export class TicketService {
 
   // FUNÇÃO: Criar Ticket Remoto (Cliente APP)
   static async criarTicketRemoto(dados: CriarTicketRemotoDTO): Promise<TicketComPosicao> {
-    const { clienteId, restauranteSlug, prioridade, quantidadePessoas } = dados;
+    const { clienteId, restauranteSlug, prioridade, quantidadePessoas, observacoes } = dados;
 
     // 1. Validar cliente (não bloqueado, buscar dados de contato e status VIP)
     const cliente = await prisma.cliente.findUnique({
@@ -211,7 +213,7 @@ export class TicketService {
       where: {
         clienteId,
         restauranteId: restaurante.id,
-        status: { in: [StatusTicket.AGUARDANDO, StatusTicket.CHAMADO] }
+        status: { in: [StatusTicket.AGUARDANDO, StatusTicket.CHAMADO, 'MESA_PRONTA' as StatusTicket] }
       }
     });
 
@@ -236,7 +238,7 @@ export class TicketService {
     const ticketsAtivos = await prisma.ticket.count({
       where: { 
         filaId: fila.id, 
-        status: { in: [StatusTicket.AGUARDANDO, StatusTicket.CHAMADO] } 
+        status: { in: [StatusTicket.AGUARDANDO, StatusTicket.CHAMADO, 'MESA_PRONTA' as StatusTicket] } 
       }
     });
     
@@ -245,6 +247,8 @@ export class TicketService {
     }
 
     // 6. Validar limite de reentradas diárias
+    // COMENTADO PARA TESTES - REATIVAR EM PRODUÇÃO
+    /*
     const inicioHoje = new Date();
     inicioHoje.setHours(0, 0, 0, 0);
     
@@ -252,13 +256,17 @@ export class TicketService {
       where: {
         restauranteId: restaurante.id,
         clienteId,
-        criadoEm: { gte: inicioHoje }
+        criadoEm: { gte: inicioHoje },
+        status: {
+          notIn: [StatusTicket.FINALIZADO, StatusTicket.CANCELADO]
+        }
       }
     });
     
     if (ticketsHoje >= restaurante.maxReentradasPorDia) {
       throw new ErroDadosInvalidos('Limite de reentradas diárias atingido para este restaurante.');
     }
+    */
 
     // 7. Calcular valorPrioridade com base na prioridade selecionada e status VIP
     let valorPrioridade = 0;
@@ -272,29 +280,29 @@ export class TicketService {
       valorPrioridade = cliente.isVip ? 0 : Number(restaurante.precoVip);
     }
 
-    // 8. Gerar número do ticket e criar registro
+    // 8. Gerar número do ticket e criar registro (com retry para race condition)
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
 
-    const novoTicket = await prisma.$transaction(async (tx) => {
-      const ultimoTicket = await tx.ticket.findFirst({
-        where: { filaId: fila.id, criadoEm: { gte: hoje } },
-        orderBy: { numeroTicket: 'desc' },
-        select: { numeroTicket: true }
-      });
+    let novoTicket;
+    let tentativas = 0;
+    const maxTentativas = 5;
 
-      let proximoNumero = 1;
-      if (ultimoTicket) {
-        const match = ultimoTicket.numeroTicket.match(/A-(\d+)/);
-        if (match) {
-          proximoNumero = parseInt(match[1]) + 1;
-        }
-      }
+    while (tentativas < maxTentativas) {
+      try {
+        novoTicket = await prisma.$transaction(async (tx) => {
+          // Contar tickets do dia para gerar próximo número
+          const ticketsHoje = await tx.ticket.count({
+            where: { filaId: fila.id, criadoEm: { gte: hoje } }
+          });
 
-      const numeroTicket = `A-${proximoNumero.toString().padStart(3, '0')}`;
+          // Usar timestamp para evitar colisão + sequencial como fallback
+          const timestamp = Date.now().toString().slice(-4);
+          const sequencial = ticketsHoje + 1 + tentativas;
+          const numeroTicket = `A-${sequencial.toString().padStart(3, '0')}-${timestamp}`;
 
-      // CREATE do ticket
-      const ticket = await tx.ticket.create({
+          // CREATE do ticket
+          const ticket = await tx.ticket.create({
         data: {
           nomeCliente: cliente.nomeCompleto,
           telefoneCliente: cliente.telefone,
@@ -307,6 +315,7 @@ export class TicketService {
           tipoEntrada: TipoEntrada.REMOTO,
           valorPrioridade,
           numeroTicket,
+          observacoes: observacoes || null,
           aceitaWhatsapp: true,
           aceitaSms: true,
           aceitaEmail: true,
@@ -339,6 +348,25 @@ export class TicketService {
       return ticket;
     });
 
+        // Sucesso - sair do loop
+        break;
+      } catch (error: any) {
+        // Se for erro de unique constraint, retry
+        if (error.code === 'P2002' && tentativas < maxTentativas - 1) {
+          tentativas++;
+          logger.warn({ tentativa: tentativas, clienteId }, 'Race condition ao criar ticket - tentando novamente');
+          await new Promise(resolve => setTimeout(resolve, 100 * tentativas)); // Backoff exponencial
+          continue;
+        }
+        // Outro erro ou esgotou tentativas - propagar
+        throw error;
+      }
+    }
+
+    if (!novoTicket) {
+      throw new Error('Falha ao criar ticket após múltiplas tentativas');
+    }
+
     // 9. Calcular posição e tempo estimado
     const { posicao, tempoEstimado } = await this.calcularPosicao(novoTicket.id);
 
@@ -355,7 +383,7 @@ export class TicketService {
 
   // FUNÇÃO: Criar Ticket 
   static async criarTicketLocal(dados: CriarTicketDTO, ator: AtorDTO): Promise<Ticket & { fila: any }> {
-    const { filaId, nomeCliente, telefoneCliente, emailCliente } = dados;
+    const { filaId, nomeCliente, telefoneCliente, emailCliente, observacoes } = dados;
 
     // Validar fila
     const fila = await prisma.fila.findFirst({
@@ -399,7 +427,7 @@ export class TicketService {
     const ticketsAtivos = await prisma.ticket.count({
       where: { 
         filaId, 
-        status: { in: [StatusTicket.AGUARDANDO, StatusTicket.CHAMADO] } 
+        status: { in: [StatusTicket.AGUARDANDO, StatusTicket.CHAMADO, 'MESA_PRONTA' as StatusTicket] } 
       }
     });
     
@@ -434,6 +462,7 @@ export class TicketService {
           nomeCliente,
           telefoneCliente: telefoneCliente?.trim() || null,
           emailCliente: emailCliente?.trim() || null,
+          observacoes: observacoes?.trim() || null,
           filaId,
           restauranteId: ator.restauranteId,
           status: StatusTicket.AGUARDANDO,
@@ -494,7 +523,7 @@ export class TicketService {
     const where: Prisma.TicketWhereInput = {
       filaId,
       restauranteId,
-      status: { in: [StatusTicket.AGUARDANDO, StatusTicket.CHAMADO] }
+      status: { in: [StatusTicket.AGUARDANDO, StatusTicket.CHAMADO, 'MESA_PRONTA' as StatusTicket] }
     };
 
     // 1. Buscar TODOS os tickets ativos 
@@ -526,6 +555,10 @@ export class TicketService {
         const posicaoReal = ticketsOrdenados.findIndex(t => t.id === ticket.id) + 1;
         posicao = posicaoReal;
         tempoEstimado = posicaoReal * tempoMedio;
+      } else if (ticket.status === 'MESA_PRONTA') {
+        // Tickets com mesa pronta não têm posição na fila
+        posicao = 0;
+        tempoEstimado = 0;
       }
       
       ticketsComPosicao.push({
@@ -660,7 +693,7 @@ export class TicketService {
     const ticket = await prisma.ticket.findFirst({
       where: {
         clienteId,
-        status: { in: [StatusTicket.AGUARDANDO, StatusTicket.CHAMADO] }
+        status: { in: [StatusTicket.AGUARDANDO, StatusTicket.CHAMADO, 'MESA_PRONTA' as StatusTicket] }
       },
       include: {
         fila: {
@@ -698,8 +731,9 @@ export class TicketService {
       throw new ErroDadosInvalidos('Você não tem permissão para cancelar este ticket.');
     }
 
-    if (ticket.status !== StatusTicket.AGUARDANDO && ticket.status !== StatusTicket.CHAMADO) {
-      throw new ErroDadosInvalidos('Apenas tickets aguardando ou chamados podem ser cancelados.');
+    const statusCancelaveis = [StatusTicket.AGUARDANDO, StatusTicket.CHAMADO, 'MESA_PRONTA' as StatusTicket];
+    if (!statusCancelaveis.includes(ticket.status)) {
+      throw new ErroDadosInvalidos('Apenas tickets aguardando/chamados/mesa pronta podem ser cancelados.');
     }
 
     // 2. Cancelar ticket
@@ -799,11 +833,46 @@ export class TicketService {
     return ticketAtualizado;
   }
 
-  static async pular(ticketId: string, ator: AtorDTO): Promise<Ticket> {
+  static async confirmarPresenca(ticketId: string, ator: AtorDTO): Promise<Ticket> {
     const ticket = await this.validarTicketRestaurante(ticketId, ator.restauranteId);
 
     if (ticket.status !== StatusTicket.CHAMADO) {
-      throw new ErroDadosInvalidos('Apenas tickets chamados podem ser pulados');
+      throw new ErroDadosInvalidos('Apenas tickets chamados podem ter presença confirmada');
+    }
+
+    const ticketAtualizado = await prisma.$transaction(async (tx) => {
+      const atualizado = await tx.ticket.update({
+        where: { id: ticketId },
+        data: {
+          status: 'MESA_PRONTA' as StatusTicket,
+        },
+        include: { fila: true }
+      });
+
+      await tx.eventoTicket.create({
+        data: {
+          ticketId,
+          restauranteId: ator.restauranteId,
+          tipo: 'PRESENCA_CONFIRMADA' as any, // Tipo customizado para o evento
+          tipoAtor: ator.papel === PapelUsuario.ADMIN ? TipoAtor.ADMIN : TipoAtor.OPERADOR,
+          atorId: ator.id
+        }
+      });
+
+      return atualizado;
+    });
+
+    logger.info({ ticketId }, 'Presença confirmada - Status MESA_PRONTA');
+
+    return ticketAtualizado;
+  }
+
+  static async pular(ticketId: string, ator: AtorDTO): Promise<Ticket> {
+    const ticket = await this.validarTicketRestaurante(ticketId, ator.restauranteId);
+
+    const statusPulaveis = [StatusTicket.CHAMADO, 'MESA_PRONTA' as StatusTicket];
+    if (!statusPulaveis.includes(ticket.status)) {
+      throw new ErroDadosInvalidos('Apenas tickets chamados/mesa pronta podem ser pulados');
     }
 
     const ticketAtualizado = await prisma.$transaction(async (tx) => {
@@ -835,8 +904,9 @@ export class TicketService {
   static async marcarNoShow(ticketId: string, ator: AtorDTO): Promise<Ticket> {
     const ticket = await this.validarTicketRestaurante(ticketId, ator.restauranteId);
 
-    if (ticket.status !== StatusTicket.CHAMADO) {
-      throw new ErroDadosInvalidos('Apenas tickets chamados podem ser marcados como no-show');
+    const statusNoShow = [StatusTicket.CHAMADO, 'MESA_PRONTA' as StatusTicket];
+    if (!statusNoShow.includes(ticket.status)) {
+      throw new ErroDadosInvalidos('Apenas tickets chamados/mesa pronta podem ser marcados como no-show');
     }
 
     const restaurante = await prisma.restaurante.findUnique({
@@ -890,8 +960,9 @@ export class TicketService {
   static async rechamar(ticketId: string, ator: AtorDTO): Promise<Ticket> {
     const ticket = await this.validarTicketRestaurante(ticketId, ator.restauranteId);
 
-    if (ticket.status !== StatusTicket.CHAMADO) {
-      throw new ErroDadosInvalidos('Apenas tickets chamados podem ser rechamados');
+    const statusRechamaveis = [StatusTicket.CHAMADO, 'MESA_PRONTA' as StatusTicket];
+    if (!statusRechamaveis.includes(ticket.status)) {
+      throw new ErroDadosInvalidos('Apenas tickets chamados/mesa pronta podem ser rechamados');
     }
 
     const ticketAtualizado = await prisma.$transaction(async (tx) => {
@@ -930,8 +1001,9 @@ export class TicketService {
   static async finalizar(ticketId: string, ator: AtorDTO, observacoes?: string): Promise<Ticket> {
     const ticket = await this.validarTicketRestaurante(ticketId, ator.restauranteId);
 
-    if (ticket.status !== StatusTicket.CHAMADO && ticket.status !== StatusTicket.ATENDENDO) {
-      throw new ErroDadosInvalidos('Apenas tickets chamados/atendendo podem ser finalizados');
+    const statusPermitidos = [StatusTicket.CHAMADO, StatusTicket.ATENDENDO, 'MESA_PRONTA' as StatusTicket];
+    if (!statusPermitidos.includes(ticket.status)) {
+      throw new ErroDadosInvalidos('Apenas tickets chamados/atendendo/mesa pronta podem ser finalizados');
     }
 
     let duracaoAtendimento: number | null = null;

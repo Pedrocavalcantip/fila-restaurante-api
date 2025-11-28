@@ -34,6 +34,7 @@ export const buscarRestaurantesProximos = async (clienteId: string) => {
       cidade: true,
       estado: true,
       status: true,
+      imagemUrl: true,
       precoFastLane: true,
       precoVip: true,
       filas: {

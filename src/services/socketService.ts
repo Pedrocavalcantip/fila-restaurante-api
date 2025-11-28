@@ -296,6 +296,34 @@ export class SocketService {
     });
   }
 
+  static emitirTicketAtualizado(
+    restauranteId: string,
+    filaId: string,
+    ticket: any
+  ): void {
+    // Emitir evento genérico de atualização para operadores
+    this.emitirParaFila(restauranteId, filaId, 'ticket:atualizado', {
+      ticket,
+      timestamp: new Date().toISOString()
+    });
+
+    // Se o status for MESA_PRONTA, emitir evento específico também
+    if (ticket.status === 'MESA_PRONTA') {
+      this.emitirParaFila(restauranteId, filaId, 'ticket:mesa-pronta', {
+        ticketId: ticket.id,
+        numeroTicket: ticket.numeroTicket,
+        timestamp: new Date().toISOString()
+      });
+
+      // Emitir para o cliente específico
+      this.emitirParaTicket(restauranteId, ticket.id, 'ticket:mesa-pronta', {
+        ticketId: ticket.id,
+        mensagem: 'Mesa pronta! Dirija-se ao balcão de atendimento',
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
+
   static emitirTicketCancelado(
     restauranteId: string,
     filaId: string,

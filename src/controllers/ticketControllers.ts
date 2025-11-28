@@ -35,7 +35,7 @@ export class TicketController {
       const { filaId } = req.params;
       
       // 2. Validar body com Zod
-      const { nomeCliente, telefoneCliente, emailCliente } = criarTicketLocalSchema.parse(req.body);
+      const { nomeCliente, telefoneCliente, emailCliente, observacoes } = criarTicketLocalSchema.parse(req.body);
 
       // 3. Delegar para o Service
       const ticket = await TicketService.criarTicketLocal(
@@ -43,6 +43,7 @@ export class TicketController {
           nomeCliente,
           telefoneCliente: telefoneCliente || undefined,
           emailCliente: emailCliente || undefined,
+          observacoes: observacoes || undefined,
           filaId
         },
         ator
@@ -86,14 +87,15 @@ export class TicketController {
 
       // 2. Validar body com Zod
       const { body } = entrarNaFilaRemotoSchema.parse({ body: req.body });
-      const { prioridade, quantidadePessoas } = body;
+      const { prioridade, quantidadePessoas, observacoes } = body;
 
       // 3. Delegar para o Service
       const ticketComPosicao = await TicketService.criarTicketRemoto({
         clienteId: cliente.id,
         restauranteSlug: slug,
         prioridade,
-        quantidadePessoas
+        quantidadePessoas,
+        observacoes
       });
 
       logger.info({ 
@@ -125,6 +127,7 @@ export class TicketController {
           nomeCliente: ticketComPosicao.nomeCliente,
           telefoneCliente: ticketComPosicao.telefoneCliente,
           emailCliente: ticketComPosicao.emailCliente,
+          observacoes: ticketComPosicao.observacoes,
           restauranteId: ticketComPosicao.restauranteId,
           criadoEm: ticketComPosicao.criadoEm
         }
@@ -159,6 +162,7 @@ export class TicketController {
           status: ticket.status,
           posicao: ticket.posicao,
           tempoEstimado: ticket.tempoEstimado,
+          observacoes: ticket.observacoes,
           restaurante: {
             id: ticket.restauranteId,
             nome: (ticket as any).restaurante?.nome
@@ -340,6 +344,43 @@ export class TicketController {
 
       res.status(200).json({
         mensagem: 'Ticket chamado com sucesso',
+        ticket
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==========================================================================
+  // POST /api/restaurantes/:restauranteId/tickets/:ticketId/confirmar-presenca
+  // Confirmar presença do cliente (CHAMADO → MESA_PRONTA)
+  // ==========================================================================
+  static async confirmarPresenca(req: Request, res: Response, next: NextFunction) {
+    try {
+      const ator = req.usuario;
+      if (!ator) throw new ErroNaoAutenticado();
+      
+      const { ticketId } = req.params;
+
+      const ticket = await TicketService.confirmarPresenca(ticketId, ator);
+      
+      logger.info({ ticketId, atorId: ator.id }, 'Presença confirmada via controller');
+
+      // Emitir eventos Socket.io
+      SocketService.emitirTicketAtualizado(
+        ator.restauranteId,
+        ticket.filaId,
+        ticket
+      );
+      
+      SocketService.emitirFilaAtualizada(
+        ator.restauranteId,
+        ticket.filaId,
+        []
+      );
+
+      res.status(200).json({
+        mensagem: 'Presença confirmada com sucesso',
         ticket
       });
     } catch (error) {
