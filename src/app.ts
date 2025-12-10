@@ -15,6 +15,9 @@ dotenv.config();
 
 const app = express();
 
+// Trust proxy para Railway/Vercel
+app.set('trust proxy', 1);
+
 // Middlewares Globais
 app.use(helmet({
   contentSecurityPolicy: false, // Permitir Swagger UI carregar estilos
