@@ -50,9 +50,7 @@ export const buscarRestaurantesProximos = async (clienteId: string) => {
             select: {
               tickets: {
                 where: {
-                  status: {
-                    in: ['AGUARDANDO', 'CHAMADO'],
-                  },
+                  status: 'AGUARDANDO',
                 },
               },
             },

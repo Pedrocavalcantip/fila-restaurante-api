@@ -1,0 +1,17 @@
+nixpacks.providers = ["node"]
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "openssl"]
+
+[phases.build]
+cmds = [
+  "npm ci",
+  "npx prisma generate",
+  "npm run build"
+]
+
+[phases.deploy]
+cmds = ["npx prisma migrate deploy"]
+
+[start]
+cmd = "npm run start"

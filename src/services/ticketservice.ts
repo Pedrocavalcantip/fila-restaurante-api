@@ -315,6 +315,7 @@ export class TicketService {
           tipoEntrada: TipoEntrada.REMOTO,
           valorPrioridade,
           numeroTicket,
+          quantidadePessoas,
           observacoes: observacoes || null,
           aceitaWhatsapp: true,
           aceitaSms: true,
@@ -689,30 +690,76 @@ export class TicketService {
   }
 
   // FUNÇÃO: Buscar Ticket Ativo do Cliente (APP)
-  static async buscarMeuTicket(clienteId: string): Promise<TicketComPosicao | null> {
-    const ticket = await prisma.ticket.findFirst({
+  static async buscarMeuTicket(clienteId: string): Promise<any[]> {
+    const tickets = await prisma.ticket.findMany({
       where: {
         clienteId,
-        status: { in: [StatusTicket.AGUARDANDO, StatusTicket.CHAMADO, 'MESA_PRONTA' as StatusTicket] }
       },
       include: {
         fila: {
           select: { id: true, nome: true, slug: true, status: true }
         },
         restaurante: {
-          select: { id: true, nome: true, slug: true }
+          select: { id: true, nome: true, slug: true, cidade: true, estado: true, imagemUrl: true }
         }
       },
       orderBy: { criadoEm: 'desc' }
     });
 
-    if (!ticket) {
-      return null;
-    }
+    // Calcular tempoEsperaMinutos e posição para cada ticket
+    const ticketsComDados = await Promise.all(tickets.map(async (ticket) => {
+      let tempoEsperaMinutos = 0;
+      let posicao = 0;
+      let tempoEstimado = 0;
+      
+      if (ticket.finalizadoEm && ticket.entradaEm) {
+        tempoEsperaMinutos = Math.floor((ticket.finalizadoEm.getTime() - ticket.entradaEm.getTime()) / (1000 * 60));
+      } else if (ticket.chamadoEm && ticket.entradaEm) {
+        tempoEsperaMinutos = Math.floor((ticket.chamadoEm.getTime() - ticket.entradaEm.getTime()) / (1000 * 60));
+      }
 
-    const { posicao, tempoEstimado } = await this.calcularPosicao(ticket.id);
+      // Calcular posição apenas para tickets AGUARDANDO
+      if (ticket.status === StatusTicket.AGUARDANDO) {
+        const resultado = await this.calcularPosicao(ticket.id);
+        posicao = resultado.posicao;
+        tempoEstimado = resultado.tempoEstimado;
+      }
 
-    return { ...ticket, posicao, tempoEstimado };
+      return {
+        id: ticket.id,
+        numero: parseInt(ticket.numeroTicket) || ticket.numeroTicket,
+        numeroTicket: ticket.numeroTicket,
+        status: ticket.status,
+        prioridade: ticket.prioridade,
+        quantidadePessoas: ticket.quantidadePessoas,
+        valorPago: parseFloat(ticket.valorPrioridade.toString()),
+        tempoEsperaMinutos,
+        posicao,
+        tempoEstimado,
+        createdAt: ticket.criadoEm,
+        updatedAt: ticket.atualizadoEm,
+        finalizadoEm: ticket.finalizadoEm,
+        observacoes: ticket.observacoes,
+        filaId: ticket.filaId,
+        restauranteId: ticket.restauranteId,
+        fila: {
+          id: ticket.fila.id,
+          nome: ticket.fila.nome,
+          slug: ticket.fila.slug,
+          status: ticket.fila.status
+        },
+        restaurante: {
+          id: ticket.restaurante.id,
+          nome: ticket.restaurante.nome,
+          slug: ticket.restaurante.slug,
+          cidade: ticket.restaurante.cidade,
+          estado: ticket.restaurante.estado,
+          imagemUrl: ticket.restaurante.imagemUrl
+        }
+      };
+    }));
+
+    return ticketsComDados;
   }
 
   // FUNÇÃO: Cliente Cancelar Seu Próprio Ticket (APP)
@@ -1117,6 +1164,207 @@ export class TicketService {
 
     logger.info({ ticketId, atorId: ator.id }, 'Ticket cancelado por operador');
     return ticketAtualizado;
+  }
+
+  // ==========================================================================
+  // ESTATÍSTICAS DO RESTAURANTE
+  // ==========================================================================
+  static async obterEstatisticas(restauranteId: string, periodo?: { inicio: Date; fim: Date }) {
+    const inicioHoje = new Date();
+    inicioHoje.setHours(0, 0, 0, 0);
+    
+    const inicio7Dias = new Date();
+    inicio7Dias.setDate(inicio7Dias.getDate() - 7);
+    inicio7Dias.setHours(0, 0, 0, 0);
+    
+    const inicio30Dias = new Date();
+    inicio30Dias.setDate(inicio30Dias.getDate() - 30);
+    inicio30Dias.setHours(0, 0, 0, 0);
+
+    // Estatísticas de HOJE
+    const ticketsHoje = await prisma.ticket.findMany({
+      where: {
+        restauranteId,
+        criadoEm: { gte: inicioHoje }
+      },
+      select: {
+        status: true,
+        prioridade: true,
+        valorPrioridade: true,
+        quantidadePessoas: true,
+        duracaoAtendimento: true,
+        entradaEm: true,
+        chamadoEm: true,
+        finalizadoEm: true
+      }
+    });
+
+    // Estatísticas dos últimos 7 dias
+    const tickets7Dias = await prisma.ticket.findMany({
+      where: {
+        restauranteId,
+        criadoEm: { gte: inicio7Dias }
+      },
+      select: {
+        status: true,
+        prioridade: true,
+        valorPrioridade: true,
+        quantidadePessoas: true,
+        duracaoAtendimento: true,
+        criadoEm: true
+      }
+    });
+
+    // Estatísticas dos últimos 30 dias
+    const tickets30Dias = await prisma.ticket.findMany({
+      where: {
+        restauranteId,
+        criadoEm: { gte: inicio30Dias }
+      },
+      select: {
+        status: true,
+        prioridade: true,
+        valorPrioridade: true,
+        quantidadePessoas: true,
+        duracaoAtendimento: true,
+        criadoEm: true
+      }
+    });
+
+    // Função auxiliar para calcular estatísticas
+    const calcularEstatisticas = (tickets: any[]) => {
+      const finalizados = tickets.filter(t => t.status === StatusTicket.FINALIZADO);
+      const cancelados = tickets.filter(t => t.status === StatusTicket.CANCELADO);
+      const noShows = tickets.filter(t => t.status === StatusTicket.NO_SHOW);
+      const fastLane = tickets.filter(t => t.prioridade === PrioridadeTicket.FAST_LANE);
+      
+      // Receita APENAS de FAST_LANE (tickets finalizados)
+      const receitaFastLane = fastLane
+        .filter(t => t.status === StatusTicket.FINALIZADO)
+        .reduce((acc, t) => acc + Number(t.valorPrioridade || 0), 0);
+      
+      // Total de pessoas atendidas
+      const totalPessoasAtendidas = finalizados.reduce((acc, t) => acc + (t.quantidadePessoas || 1), 0);
+      
+      // Tempo médio de espera (apenas finalizados com chamadoEm e entradaEm)
+      const ticketsComTempo = finalizados.filter(t => t.chamadoEm && t.entradaEm);
+      const tempoMedioEspera = ticketsComTempo.length > 0
+        ? ticketsComTempo.reduce((acc, t) => {
+            const espera = (new Date(t.chamadoEm).getTime() - new Date(t.entradaEm).getTime()) / 60000;
+            return acc + espera;
+          }, 0) / ticketsComTempo.length
+        : 0;
+      
+      // Tempo médio de atendimento
+      const ticketsComAtendimento = finalizados.filter(t => t.duracaoAtendimento);
+      const tempoMedioAtendimento = ticketsComAtendimento.length > 0
+        ? ticketsComAtendimento.reduce((acc, t) => acc + (t.duracaoAtendimento || 0), 0) / ticketsComAtendimento.length
+        : 0;
+
+      // Taxa de conversão (finalizados / total)
+      const taxaConversao = tickets.length > 0 
+        ? (finalizados.length / tickets.length) * 100 
+        : 0;
+
+      // Taxa de no-show
+      const taxaNoShow = tickets.length > 0 
+        ? (noShows.length / tickets.length) * 100 
+        : 0;
+
+      return {
+        totalTickets: tickets.length,
+        finalizados: finalizados.length,
+        cancelados: cancelados.length,
+        noShows: noShows.length,
+        aguardando: tickets.filter(t => t.status === StatusTicket.AGUARDANDO).length,
+        emAtendimento: tickets.filter(t => t.status === StatusTicket.ATENDENDO || t.status === StatusTicket.CHAMADO).length,
+        
+        // Prioridades
+        ticketsFastLane: fastLane.length,
+        ticketsNormais: tickets.filter(t => t.prioridade === PrioridadeTicket.NORMAL).length,
+        
+        // Receita (apenas Fast Lane)
+        receitaFastLane: Number(receitaFastLane.toFixed(2)),
+        
+        // Pessoas
+        totalPessoasAtendidas,
+        mediaPessoasPorTicket: finalizados.length > 0 
+          ? Number((totalPessoasAtendidas / finalizados.length).toFixed(1))
+          : 0,
+        
+        // Tempos (em minutos)
+        tempoMedioEspera: Number(tempoMedioEspera.toFixed(1)),
+        tempoMedioAtendimento: Number(tempoMedioAtendimento.toFixed(1)),
+        
+        // Taxas
+        taxaConversao: Number(taxaConversao.toFixed(1)),
+        taxaNoShow: Number(taxaNoShow.toFixed(1))
+      };
+    };
+
+    // Top clientes (mais visitas)
+    const topClientes = await prisma.cliente.findMany({
+      where: { restauranteId },
+      orderBy: { totalVisitas: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        nomeCompleto: true,
+        email: true,
+        telefone: true,
+        totalVisitas: true,
+        totalFastLane: true,
+        totalNoShows: true,
+        criadoEm: true
+      }
+    });
+
+    // Resumo geral de clientes
+    const totalClientes = await prisma.cliente.count({
+      where: { restauranteId }
+    });
+
+    // Tickets por dia (últimos 7 dias) para gráfico
+    const ticketsPorDia = [];
+    for (let i = 6; i >= 0; i--) {
+      const dia = new Date();
+      dia.setDate(dia.getDate() - i);
+      dia.setHours(0, 0, 0, 0);
+      
+      const proximoDia = new Date(dia);
+      proximoDia.setDate(proximoDia.getDate() + 1);
+      
+      const ticketsDia = tickets7Dias.filter(t => {
+        const criado = new Date(t.criadoEm);
+        return criado >= dia && criado < proximoDia;
+      });
+      
+      ticketsPorDia.push({
+        data: dia.toISOString().split('T')[0],
+        total: ticketsDia.length,
+        finalizados: ticketsDia.filter(t => t.status === StatusTicket.FINALIZADO).length,
+        receita: ticketsDia
+          .filter(t => t.status === StatusTicket.FINALIZADO && t.prioridade === PrioridadeTicket.FAST_LANE)
+          .reduce((acc, t) => acc + Number(t.valorPrioridade || 0), 0)
+      });
+    }
+
+    return {
+      hoje: calcularEstatisticas(ticketsHoje),
+      ultimos7Dias: calcularEstatisticas(tickets7Dias),
+      ultimos30Dias: calcularEstatisticas(tickets30Dias),
+      
+      clientes: {
+        total: totalClientes,
+        topClientes
+      },
+      
+      graficos: {
+        ticketsPorDia
+      },
+      
+      geradoEm: new Date().toISOString()
+    };
   }
 
 

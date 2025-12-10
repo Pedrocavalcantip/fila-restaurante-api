@@ -125,6 +125,65 @@ router.post('/filas/:filaId/tickets', criarTicketLimiter, autenticar, autorizarP
 
 /**
  * @swagger
+ * /tickets/estatisticas:
+ *   get:
+ *     tags: [Dashboard Administrativo]
+ *     summary: Obter estatísticas do restaurante
+ *     description: |
+ *       Retorna estatísticas completas do restaurante incluindo:
+ *       - Dados de hoje, últimos 7 dias e últimos 30 dias
+ *       - Receita de Fast Lane (apenas Fast Lane é considerado)
+ *       - Taxa de conversão e no-show
+ *       - Top 10 clientes
+ *       - Dados para gráficos
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Estatísticas do restaurante
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 hoje:
+ *                   type: object
+ *                   properties:
+ *                     totalTickets: { type: integer }
+ *                     finalizados: { type: integer }
+ *                     cancelados: { type: integer }
+ *                     noShows: { type: integer }
+ *                     ticketsFastLane: { type: integer }
+ *                     receitaFastLane: { type: number }
+ *                     receitaTotal: { type: number }
+ *                     totalPessoasAtendidas: { type: integer }
+ *                     tempoMedioEspera: { type: number }
+ *                     tempoMedioAtendimento: { type: number }
+ *                     taxaConversao: { type: number }
+ *                     taxaNoShow: { type: number }
+ *                 ultimos7Dias:
+ *                   type: object
+ *                 ultimos30Dias:
+ *                   type: object
+ *                 clientes:
+ *                   type: object
+ *                   properties:
+ *                     total: { type: integer }
+ *                     vips: { type: integer }
+ *                     topClientes: { type: array }
+ *                 graficos:
+ *                   type: object
+ *                   properties:
+ *                     ticketsPorDia: { type: array }
+ *       401:
+ *         description: Token ausente ou inválido
+ */
+// GET /api/v1/tickets/estatisticas
+// Estatísticas do restaurante (Admin/Operador)
+router.get('/estatisticas', operadorLimiter, autenticar, autorizarPapeis([PapelUsuario.ADMIN, PapelUsuario.OPERADOR]), TicketController.obterEstatisticas);
+
+/**
+ * @swagger
  * /tickets/filas/{filaId}/tickets/ativa:
  *   get:
  *     tags: [Tickets Locais (Operador)]

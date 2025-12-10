@@ -55,6 +55,7 @@ export const autenticarUsuario = async (emailLimpo: string, senha: string) => {
       nome: usuario.nome,
       email: usuario.email,
       papel: usuario.papel,
+      restauranteId: usuario.restauranteId,
     },
   };
 };

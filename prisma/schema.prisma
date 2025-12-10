@@ -117,6 +117,7 @@ model Ticket {
   nomeCliente        String
   telefoneCliente    String?
   emailCliente       String?
+  quantidadePessoas  Int              @default(1)
   aceitaSms          Boolean          @default(true)
   aceitaWhatsapp     Boolean          @default(false)
   aceitaEmail        Boolean          @default(true)

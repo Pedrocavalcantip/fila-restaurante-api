@@ -159,6 +159,7 @@ export const buscarMeuRestaurante = async (restauranteId: string) => {
       slug: true,
       cidade: true,
       estado: true,
+      imagemUrl: true,
       fusoHorario: true,
       idioma: true,
       status: true,
@@ -205,7 +206,9 @@ export const buscarMeuRestaurante = async (restauranteId: string) => {
     throw new ErroNaoEncontrado('Restaurante não encontrado.');
   }
 
-  return restaurante;
+  return {
+    ...restaurante,
+  } as any;
 };
 
 export const buscarRestaurantePorSlug = async (slug: string) => {

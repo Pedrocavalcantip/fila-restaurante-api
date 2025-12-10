@@ -144,37 +144,9 @@ export class TicketController {
       const cliente = req.cliente;
       if (!cliente) throw new ErroNaoAutenticado();
 
-      const ticket = await TicketService.buscarMeuTicket(cliente.id);
+      const tickets = await TicketService.buscarMeuTicket(cliente.id);
 
-      if (!ticket) {
-        return res.status(200).json({
-          mensagem: 'Você não possui tickets ativos no momento',
-          ticket: null
-        });
-      }
-
-      res.status(200).json({
-        ticket: {
-          id: ticket.id,
-          numeroTicket: ticket.numeroTicket,
-          prioridade: ticket.prioridade,
-          valorPrioridade: ticket.valorPrioridade,
-          status: ticket.status,
-          posicao: ticket.posicao,
-          tempoEstimado: ticket.tempoEstimado,
-          observacoes: ticket.observacoes,
-          restaurante: {
-            id: ticket.restauranteId,
-            nome: (ticket as any).restaurante?.nome
-          },
-          fila: {
-            id: ticket.filaId,
-            nome: (ticket as any).fila?.nome
-          },
-          criadoEm: ticket.criadoEm,
-          chamadoEm: ticket.chamadoEm
-        }
-      });
+      res.status(200).json(tickets);
     } catch (error) {
       next(error);
     }
@@ -577,6 +549,25 @@ export class TicketController {
         tempoEstimado,
         tempoEstimadoFormatado: `~${tempoEstimado} minutos`
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==========================================================================
+  // GET /api/v1/tickets/estatisticas
+  // Estatísticas do restaurante (Admin/Operador)
+  // ==========================================================================
+  static async obterEstatisticas(req: Request, res: Response, next: NextFunction) {
+    try {
+      const ator = req.usuario;
+      if (!ator) throw new ErroNaoAutenticado();
+
+      const estatisticas = await TicketService.obterEstatisticas(ator.restauranteId);
+
+      logger.info({ restauranteId: ator.restauranteId }, 'Estatísticas consultadas');
+
+      res.status(200).json(estatisticas);
     } catch (error) {
       next(error);
     }
