@@ -21,6 +21,30 @@ O **Fila Restaurante API** é uma solução de gerenciamento de filas virtuais p
 
 Restaurantes frequentemente perdem clientes devido a longas filas e falta de controle sobre o fluxo de entrada. Este sistema resolve esse problema através de filas digitais com notificações em tempo real, gestão de capacidade, sistema de Fast Lane/VIP e analytics para otimização operacional.
 
+### Screenshots
+
+<div align="center">
+
+![Tela Inicial](.github/assets/Home.png)
+*Tela inicial do sistema*
+
+![Dashboard](.github/assets/Dashboard.png)
+*Dashboard de gerenciamento do restaurante*
+
+![Restaurantes](.github/assets/Restaurantes.png)
+*Listagem de restaurantes*
+
+![Interface Operador](.github/assets/Operador.png)
+*Interface do operador*
+
+![Cliente na Fila](.github/assets/ClienteFila.png)
+*Cliente visualizando sua posição na fila*
+
+![Cliente Chamado](.github/assets/ClienteChamado.png)
+*Notificação de chamada do cliente*
+
+</div>
+
 ---
 
 ## Funcionalidades Principais
